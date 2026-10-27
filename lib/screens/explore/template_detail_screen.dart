@@ -163,7 +163,7 @@ class _TemplateDetailScreenState extends ConsumerState<TemplateDetailScreen> {
               // Template Details Body matching Screen 28
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 120),
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 140),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -278,28 +278,33 @@ class _TemplateDetailScreenState extends ConsumerState<TemplateDetailScreen> {
             left: 0,
             right: 0,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
               decoration: BoxDecoration(
                 color: AppColors.canvasBackground.withOpacity(0.95),
                 border: const Border(
                   top: BorderSide(color: AppColors.cardBorder, width: 1),
                 ),
               ),
-              child: GlowingActionButton(
-                label: "Use Template & Edit",
-                icon: Icons.movie_creation_rounded,
-                onTap: () {
-                  final newProject = ref
-                      .read(projectProvider.notifier)
-                      .createDraftFromTemplate(
-                        title: template.title,
-                        thumbnailAsset: template.thumbnailAsset,
-                        aspectRatio: template.aspectRatio,
-                      );
-                  ref.read(currentEditingProjectProvider.notifier).state =
-                      newProject;
-                  context.push(RouteNames.editor);
-                },
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+                  child: GlowingActionButton(
+                    label: "Use Template & Edit",
+                    icon: Icons.movie_creation_rounded,
+                    onTap: () {
+                      final newProject = ref
+                          .read(projectProvider.notifier)
+                          .createDraftFromTemplate(
+                            title: template.title,
+                            thumbnailAsset: template.thumbnailAsset,
+                            aspectRatio: template.aspectRatio,
+                          );
+                      ref.read(currentEditingProjectProvider.notifier).state =
+                          newProject;
+                      context.push(RouteNames.editor);
+                    },
+                  ),
+                ),
               ),
             ),
           ),

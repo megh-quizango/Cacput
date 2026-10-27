@@ -406,34 +406,39 @@ class _MyStudioScreenState extends ConsumerState<MyStudioScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         decoration: const BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit_rounded, color: Colors.white),
-              title: const Text("Open in Editor"),
-              onTap: () {
-                Navigator.pop(context);
-                ref.read(currentEditingProjectProvider.notifier).state = project;
-                context.push(RouteNames.editor);
-              },
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.edit_rounded, color: Colors.white),
+                  title: const Text("Open in Editor"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    ref.read(currentEditingProjectProvider.notifier).state = project;
+                    context.push(RouteNames.editor);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline_rounded,
+                      color: Colors.redAccent),
+                  title: const Text("Delete Project",
+                      style: TextStyle(color: Colors.redAccent)),
+                  onTap: () {
+                    ref.read(projectProvider.notifier).deleteProject(project.id);
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline_rounded,
-                  color: Colors.redAccent),
-              title: const Text("Delete Project",
-                  style: TextStyle(color: Colors.redAccent)),
-              onTap: () {
-                ref.read(projectProvider.notifier).deleteProject(project.id);
-                Navigator.pop(context);
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );

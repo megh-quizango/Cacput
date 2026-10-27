@@ -96,7 +96,7 @@ class _QuizRewardScreenState extends ConsumerState<QuizRewardScreen> {
             ),
 
             SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

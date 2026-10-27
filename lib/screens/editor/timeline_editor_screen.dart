@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/constants/app_constants.dart';
@@ -24,7 +25,7 @@ class _TimelineEditorScreenState extends ConsumerState<TimelineEditorScreen> {
   int _totalDurationSeconds = 15;
 
   String _activeTool = "Split";
-  String _selectedSplitOption = "Option 1";
+  String _selectedSplitOption = "Half";
   String _selectedFilter = "Normal";
   String _selectedCrop = "9:16";
   double _volumeLevel = 0.8;
@@ -43,11 +44,11 @@ class _TimelineEditorScreenState extends ConsumerState<TimelineEditorScreen> {
   ];
 
   final List<String> _splitOptions = [
-    "Option 1",
-    "Option 2",
-    "Option 3",
-    "Option 4",
-    "Option 5",
+    "Half",
+    "Quarter",
+    "One-Third",
+    "Three Quarter",
+    "Manual",
   ];
 
   final List<String> _filters = [
@@ -361,8 +362,8 @@ class _TimelineEditorScreenState extends ConsumerState<TimelineEditorScreen> {
 
             // 3. Horizontal Tool Dock matching Screen 32
             Container(
-              height: 72,
-              padding: const EdgeInsets.symmetric(vertical: 8),
+              height: 74,
+              padding: const EdgeInsets.symmetric(vertical: 6),
               decoration: const BoxDecoration(
                 color: Color(0xFF111119),
                 border: Border(
@@ -403,6 +404,7 @@ class _TimelineEditorScreenState extends ConsumerState<TimelineEditorScreen> {
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
                             tool["icon"],
@@ -411,7 +413,7 @@ class _TimelineEditorScreenState extends ConsumerState<TimelineEditorScreen> {
                                 ? AppColors.brandPink
                                 : AppColors.textSecondary,
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
                           Text(
                             tool["label"],
                             style: AppTypography.labelSmall.copyWith(
@@ -736,16 +738,19 @@ class _ExportModalContentState extends ConsumerState<_ExportModalContent> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
       decoration: const BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         border: Border(top: BorderSide(color: AppColors.cardBorder)),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
           Center(
             child: Container(
               width: 44,
@@ -898,14 +903,22 @@ class _ExportModalContentState extends ConsumerState<_ExportModalContent> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
+                            final box = context.findRenderObject() as RenderBox?;
+                            final origin = box != null
+                                ? box.localToGlobal(Offset.zero) & box.size
+                                : null;
                             Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text("Opening Android Share sheet..."),
-                                duration: Duration(seconds: 2),
-                              ),
-                            );
+                            try {
+                              await SharePlus.instance.share(
+                                ShareParams(
+                                  text: "Check out this video",
+                                  sharePositionOrigin: origin,
+                                ),
+                              );
+                            } catch (e) {
+                              debugPrint("Error sharing video: $e");
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.brandPink,
@@ -922,6 +935,8 @@ class _ExportModalContentState extends ConsumerState<_ExportModalContent> {
           ],
         ],
       ),
-    );
+    ),
+  ),
+);
   }
 }

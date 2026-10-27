@@ -56,7 +56,7 @@ class AutoCaptionScreen extends ConsumerWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 100),
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 130),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -383,33 +383,38 @@ class AutoCaptionScreen extends ConsumerWidget {
         ),
       ),
       bottomSheet: Container(
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
         decoration: const BoxDecoration(
           color: AppColors.canvasBackground,
           border: Border(top: BorderSide(color: AppColors.cardBorder)),
         ),
-        child: GlowingActionButton(
-          label: state.isCompleted
-              ? "Apply Captions & Edit Timeline"
-              : (state.isGenerating
-                  ? "Transcribing..."
-                  : "Generate Captions"),
-          isLoading: state.isGenerating,
-          onTap: () {
-            if (state.isCompleted) {
-              final project = ref
-                  .read(projectProvider.notifier)
-                  .createDraftFromTemplate(
-                    title: "Auto-Captioned Clip",
-                    thumbnailAsset: AppConstants.sampleLakeAsset,
-                    aspectRatio: "9:16",
-                  );
-              ref.read(currentEditingProjectProvider.notifier).state = project;
-              context.push(RouteNames.editor);
-            } else {
-              notifier.simulateCaptionGeneration();
-            }
-          },
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 14),
+            child: GlowingActionButton(
+              label: state.isCompleted
+                  ? "Apply Captions & Edit Timeline"
+                  : (state.isGenerating
+                      ? "Transcribing..."
+                      : "Generate Captions"),
+              isLoading: state.isGenerating,
+              onTap: () {
+                if (state.isCompleted) {
+                  final project = ref
+                      .read(projectProvider.notifier)
+                      .createDraftFromTemplate(
+                        title: "Auto-Captioned Clip",
+                        thumbnailAsset: AppConstants.sampleLakeAsset,
+                        aspectRatio: "9:16",
+                      );
+                  ref.read(currentEditingProjectProvider.notifier).state = project;
+                  context.push(RouteNames.editor);
+                } else {
+                  notifier.simulateCaptionGeneration();
+                }
+              },
+            ),
+          ),
         ),
       ),
     );

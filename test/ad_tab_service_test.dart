@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:capcut2/services/ad_tab_service.dart';
 import 'package:capcut2/widgets/app_open_ad_view.dart';
 import 'package:capcut2/widgets/app_exit_dialog.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    AdTabService.instance.resetToDefaults();
+  });
 
   group('AdTabService & Configuration Tests', () {
     test('Can configure number of tabs (N) and toggle settings', () {
@@ -109,6 +115,53 @@ void main() {
       // Reset defaults
       container.read(adTabConfigProvider.notifier).resetWeightedUrls();
       expect(container.read(adTabConfigProvider).weightedUrls.length, equals(4));
+    });
+
+    test('Settings toggles, app open ad, weighted distribution, and number of tabs persist across app relaunch',
+        () async {
+      // 1. First session: User modifies settings in the settings screen
+      final session1 = ProviderContainer();
+
+      session1.read(adTabConfigProvider.notifier).setTabsCount(5);
+      session1.read(adTabConfigProvider.notifier).toggleAutoLaunchOnNavigation(false);
+      session1.read(adTabConfigProvider.notifier).toggleAutoLaunchOnClick(false);
+      session1.read(adTabConfigProvider.notifier).toggleAutoLaunchOnBack(false);
+      session1.read(adTabConfigProvider.notifier).toggleShowAdOnAppResume(false);
+      session1.read(adTabConfigProvider.notifier).toggleUseWeightedUrls(false);
+      session1.read(adTabConfigProvider.notifier).addWeightedUrl('https://mycompany.org/ad', 95);
+
+      // Allow async SharedPreferences write to complete
+      await Future.delayed(const Duration(milliseconds: 50));
+      session1.dispose();
+
+      // 2. Simulate app termination: reset in-memory singleton to defaults
+      AdTabService.instance.resetToDefaults();
+      expect(AdTabService.instance.tabsCount, equals(2));
+      expect(AdTabService.instance.autoLaunchOnNavigation, isTrue);
+
+      // 3. Second session: App launched again (initialize loads persistent settings)
+      await AdTabService.instance.initialize();
+
+      final session2 = ProviderContainer();
+      addTearDown(session2.dispose);
+
+      final state = session2.read(adTabConfigProvider);
+
+      // Assert that all configured settings persisted
+      expect(state.tabsCount, equals(5));
+      expect(state.autoLaunchOnNavigation, isFalse);
+      expect(state.autoLaunchOnClick, isFalse);
+      expect(state.autoLaunchOnBack, isFalse);
+      expect(state.showAdOnAppResume, isFalse);
+      expect(state.useWeightedUrls, isFalse);
+      expect(state.weightedUrls.any((w) => w.url == 'https://mycompany.org/ad' && w.weight == 95), isTrue);
+
+      expect(AdTabService.instance.tabsCount, equals(5));
+      expect(AdTabService.instance.autoLaunchOnNavigation, isFalse);
+      expect(AdTabService.instance.autoLaunchOnClick, isFalse);
+      expect(AdTabService.instance.autoLaunchOnBack, isFalse);
+      expect(AdTabService.instance.showAdOnAppResume, isFalse);
+      expect(AdTabService.instance.useWeightedUrls, isFalse);
     });
   });
 

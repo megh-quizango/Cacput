@@ -672,55 +672,60 @@ class ProfileScreen extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
         decoration: const BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(top: BorderSide(color: AppColors.cardBorder)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text("Send Feedback", style: AppTypography.titleLarge),
-            const SizedBox(height: 8),
-            Text(
-              "Tell us how we can improve your editing workflow",
-              style: AppTypography.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              maxLines: 3,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: "Write your feedback or bug report here...",
-                hintStyle: const TextStyle(color: AppColors.textMuted),
-                filled: true,
-                fillColor: AppColors.canvasBackground,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: const BorderSide(color: AppColors.cardBorder),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text("Send Feedback", style: AppTypography.titleLarge),
+                const SizedBox(height: 8),
+                Text(
+                  "Tell us how we can improve your editing workflow",
+                  style: AppTypography.bodyMedium,
                 ),
-              ),
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text("Thank you for your feedback!")),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPink,
-                minimumSize: const Size(double.infinity, 50),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                const SizedBox(height: 16),
+                TextField(
+                  maxLines: 3,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: "Write your feedback or bug report here...",
+                    hintStyle: const TextStyle(color: AppColors.textMuted),
+                    filled: true,
+                    fillColor: AppColors.canvasBackground,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: AppColors.cardBorder),
+                    ),
+                  ),
                 ),
-              ),
-              child: const Text("Submit Feedback"),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text("Thank you for your feedback!")),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPink,
+                    minimumSize: const Size(double.infinity, 50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text("Submit Feedback"),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -757,20 +762,23 @@ class ProfileScreen extends ConsumerWidget {
           builder: (context, setModalState) {
             return Container(
               height: MediaQuery.of(context).size.height * 0.85,
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-                left: 20,
-                right: 20,
-                top: 20,
-              ),
               decoration: const BoxDecoration(
                 color: AppColors.canvasBackground,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
                 border: Border(top: BorderSide(color: AppColors.cardBorder)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+                    left: 20,
+                    right: 20,
+                    top: 20,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                   // Handle bar
                   Center(
                     child: Container(
@@ -1024,7 +1032,9 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-            );
+            ),
+          ),
+        );
           },
         );
       },

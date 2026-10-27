@@ -5,15 +5,23 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/responsive_orientation_manager.dart';
 import 'core/routing/app_router.dart';
 import 'services/connectivity_service.dart';
+import 'services/ad_tab_service.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase (Core, Crashlytics, Remote Config, Analytics)
+  await FirebaseService.instance.initialize();
 
   // Enforce initial responsive orientation lock (portrait for mobile, unlocked for tablets)
   ResponsiveOrientationHelper.enforceFromPlatformDispatcher();
 
   // Initialize network connectivity monitoring
   ConnectivityService.instance.initialize();
+
+  // Initialize AdTabService and load persistent custom chrome tab and ad configuration
+  await AdTabService.instance.initialize();
 
   // Dark navigation and status bar style matching Android specifications
   SystemChrome.setSystemUIOverlayStyle(

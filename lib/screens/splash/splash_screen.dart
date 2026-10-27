@@ -7,6 +7,8 @@ import '../../core/routing/route_names.dart';
 import '../../core/theme/responsive_orientation_manager.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/ad_tab_service.dart';
+import '../../services/firebase_service.dart';
+import '../../widgets/inline_native_banner_ad.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -80,7 +82,13 @@ class _SplashScreenState extends State<SplashScreen>
     _isProceeding = true;
 
     // Load SDKs now that we are online
-    AdTabService.instance.initialize();
+    await FirebaseService.instance.initialize();
+    await AdTabService.instance.initialize();
+
+    // Eagerly preload real Google Mobile Ads (App Open Ad & Native Ad)
+    // so they are ready immediately right after splash
+    AdTabService.instance.preloadAds();
+    InlineNativeBannerAd.preload();
 
     // Ensure splash presentation has played for at least minimum branding time
     if (_startTime != null) {
@@ -111,8 +119,9 @@ class _SplashScreenState extends State<SplashScreen>
     ResponsiveOrientationHelper.enforce(context);
     return Scaffold(
       backgroundColor: AppColors.canvasBackground,
-      body: Stack(
-        children: [
+      body: SafeArea(
+        child: Stack(
+          children: [
           // Ambient neon glow in background
           Positioned(
             top: -100,
@@ -223,7 +232,7 @@ class _SplashScreenState extends State<SplashScreen>
 
           // Bottom Loading indicator
           Positioned(
-            bottom: 60,
+            bottom: 40,
             left: 0,
             right: 0,
             child: Center(
@@ -241,6 +250,7 @@ class _SplashScreenState extends State<SplashScreen>
           ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 }

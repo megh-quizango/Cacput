@@ -118,6 +118,22 @@ class SettingsScreen extends ConsumerWidget {
               ),
               child: Column(
                 children: [
+                  // Enable / Disable Custom Chrome Tabs Master Toggle
+                  SwitchListTile(
+                    secondary: const Icon(Icons.open_in_browser_rounded, color: AppColors.brandCyan),
+                    title: const Text("Enable Custom Chrome Tabs"),
+                    subtitle: Text(
+                      "Master toggle deciding if Custom Chrome Tabs launching is active",
+                      style: AppTypography.labelSmall.copyWith(color: AppColors.textSecondary),
+                    ),
+                    value: adConfig.customChromeEnabled,
+                    activeThumbColor: AppColors.brandCyan,
+                    onChanged: (val) {
+                      ref.read(adTabConfigProvider.notifier).toggleCustomChromeEnabled(val);
+                    },
+                  ),
+                  const Divider(height: 1, indent: 56),
+
                   // N Tabs Counter
                   ListTile(
                     leading: const Icon(Icons.tab_rounded, color: AppColors.brandCyan),
@@ -635,54 +651,59 @@ class SettingsScreen extends ConsumerWidget {
       isScrollControlled: true,
       builder: (_) => Container(
         height: 480,
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
         decoration: const BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(top: BorderSide(color: AppColors.cardBorder)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.cardBorder,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text("Select Language", style: AppTypography.titleLarge),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.separated(
-                itemCount: AppConstants.availableLanguages.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (context, idx) {
-                  final lang = AppConstants.availableLanguages[idx];
-                  final code = lang.substring(0, 2).toUpperCase();
-                  return ListTile(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBorder,
+                      borderRadius: BorderRadius.circular(2),
                     ),
-                    tileColor: AppColors.canvasBackground,
-                    title: Text(lang, style: const TextStyle(color: Colors.white)),
-                    trailing: Text(code,
-                        style: const TextStyle(
-                            color: AppColors.brandPink,
-                            fontWeight: FontWeight.w700)),
-                    onTap: () {
-                      ref.read(settingsProvider.notifier).setLanguage(code, lang);
-                      Navigator.pop(context);
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text("Select Language", style: AppTypography.titleLarge),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: ListView.separated(
+                    itemCount: AppConstants.availableLanguages.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, idx) {
+                      final lang = AppConstants.availableLanguages[idx];
+                      final code = lang.substring(0, 2).toUpperCase();
+                      return ListTile(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        tileColor: AppColors.canvasBackground,
+                        title: Text(lang, style: const TextStyle(color: Colors.white)),
+                        trailing: Text(code,
+                            style: const TextStyle(
+                                color: AppColors.brandPink,
+                                fontWeight: FontWeight.w700)),
+                        onTap: () {
+                          ref.read(settingsProvider.notifier).setLanguage(code, lang);
+                          Navigator.pop(context);
+                        },
+                      );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -729,49 +750,54 @@ class SettingsScreen extends ConsumerWidget {
       isScrollControlled: true,
       builder: (_) => Container(
         height: 520,
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
         decoration: const BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(top: BorderSide(color: AppColors.cardBorder)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 44,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.cardBorder,
-                  borderRadius: BorderRadius.circular(2),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardBorder,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 18),
-            Text(title, style: AppTypography.titleLarge),
-            const SizedBox(height: 16),
-            Expanded(
-              child: SingleChildScrollView(
-                child: Text(
-                  "PhotoVideoCourse CapCut Replica terms, conditions, privacy protections and open source licenses.\n\n"
-                  "1. User Media & Privacy: All video frames, audio tracks, and images are processed locally on your device. No user video files are uploaded to third-party ad networks.\n\n"
-                  "2. AI Features: Features such as Auto-Caption generation, voice synthesis, and video upscaling use on-device accelerated models.\n\n"
-                  "3. Open Source Licenses: Flutter framework, Riverpod state management, GoRouter, Google Fonts (Plus Jakarta Sans). Licensed under Apache 2.0 and BSD-3-Clause licenses.",
-                  style: AppTypography.bodyMedium.copyWith(height: 1.5),
+                const SizedBox(height: 18),
+                Text(title, style: AppTypography.titleLarge),
+                const SizedBox(height: 16),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      "PhotoVideoCourse CapCut Replica terms, conditions, privacy protections and open source licenses.\n\n"
+                      "1. User Media & Privacy: All video frames, audio tracks, and images are processed locally on your device. No user video files are uploaded to third-party ad networks.\n\n"
+                      "2. AI Features: Features such as Auto-Caption generation, voice synthesis, and video upscaling use on-device accelerated models.\n\n"
+                      "3. Open Source Licenses: Flutter framework, Riverpod state management, GoRouter, Google Fonts (Plus Jakarta Sans). Licensed under Apache 2.0 and BSD-3-Clause licenses.",
+                      style: AppTypography.bodyMedium.copyWith(height: 1.5),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brandPink,
+                    minimumSize: const Size(double.infinity, 48),
+                  ),
+                  child: const Text("Close"),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.brandPink,
-                minimumSize: const Size(double.infinity, 48),
-              ),
-              child: const Text("Close"),
-            ),
-          ],
+          ),
         ),
       ),
     );

@@ -182,55 +182,60 @@ class AiStudioHubScreen extends ConsumerWidget {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
         decoration: const BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           border: Border(top: BorderSide(color: AppColors.cardBorder)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: tool.accentColor.withOpacity(0.16),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(tool.icon, color: tool.accentColor, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    Text(tool.title, style: AppTypography.titleLarge),
-                    Text(tool.subtitle, style: AppTypography.bodyMedium),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: tool.accentColor.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(tool.icon, color: tool.accentColor, size: 24),
+                    ),
+                    const SizedBox(width: 16),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(tool.title, style: AppTypography.titleLarge),
+                        Text(tool.subtitle, style: AppTypography.bodyMedium),
+                      ],
+                    ),
                   ],
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  "Select a video to apply ${tool.title}. Our on-device neural network will process frames with low latency and hardware acceleration.",
+                  style: AppTypography.bodyMedium,
+                ),
+                const SizedBox(height: 28),
+                ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    context.push(RouteNames.editor);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: tool.accentColor,
+                    minimumSize: const Size(double.infinity, 52),
+                  ),
+                  child: const Text("Select Video from Studio"),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            Text(
-              "Select a video to apply ${tool.title}. Our on-device neural network will process frames with low latency and hardware acceleration.",
-              style: AppTypography.bodyMedium,
-            ),
-            const SizedBox(height: 28),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                context.push(RouteNames.editor);
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: tool.accentColor,
-                minimumSize: const Size(double.infinity, 52),
-              ),
-              child: const Text("Select Video from Studio"),
-            ),
-          ],
+          ),
         ),
       ),
     );

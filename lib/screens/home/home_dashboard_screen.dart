@@ -9,6 +9,7 @@ import '../../providers/user_provider.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/template_provider.dart';
 import '../studio/widgets/new_project_modal.dart';
+import '../../widgets/inline_native_banner_ad.dart';
 import '../../core/theme/responsive_orientation_manager.dart';
 
 class HomeDashboardScreen extends ConsumerWidget {
@@ -153,6 +154,9 @@ class HomeDashboardScreen extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+      bottomNavigationBar: const InlineNativeBannerAd(
+        margin: EdgeInsets.zero,
       ),
     );
   }

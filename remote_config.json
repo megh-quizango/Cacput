@@ -1,0 +1,130 @@
+{
+  "parameters": {
+    "ad_unit_native_android": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/2247696110"
+      },
+      "description": "Google AdMob Native Ad unit ID for Android (Inline native banner)",
+      "valueType": "STRING"
+    },
+    "ad_unit_native_ios": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/3986624511"
+      },
+      "description": "Google AdMob Native Ad unit ID for iOS (Inline native banner)",
+      "valueType": "STRING"
+    },
+    "ad_unit_app_open_android": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/9257395921"
+      },
+      "description": "Google AdMob App Open Ad unit ID for Android",
+      "valueType": "STRING"
+    },
+    "ad_unit_app_open_ios": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/5575463023"
+      },
+      "description": "Google AdMob App Open Ad unit ID for iOS",
+      "valueType": "STRING"
+    },
+    "ad_unit_banner_android": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/6300978111"
+      },
+      "description": "Google AdMob Standard Banner Ad unit ID for Android",
+      "valueType": "STRING"
+    },
+    "ad_unit_banner_ios": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/2934735716"
+      },
+      "description": "Google AdMob Standard Banner Ad unit ID for iOS",
+      "valueType": "STRING"
+    },
+    "ad_unit_interstitial_android": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/1033173712"
+      },
+      "description": "Google AdMob Interstitial Ad unit ID for Android",
+      "valueType": "STRING"
+    },
+    "ad_unit_interstitial_ios": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/4411468910"
+      },
+      "description": "Google AdMob Interstitial Ad unit ID for iOS",
+      "valueType": "STRING"
+    },
+    "ad_unit_rewarded_android": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/5224354917"
+      },
+      "description": "Google AdMob Rewarded Ad unit ID for Android",
+      "valueType": "STRING"
+    },
+    "ad_unit_rewarded_ios": {
+      "defaultValue": {
+        "value": "ca-app-pub-3940256099942544/1712485313"
+      },
+      "description": "Google AdMob Rewarded Ad unit ID for iOS",
+      "valueType": "STRING"
+    },
+    "custom_chrome_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Master switch to enable or disable Custom Chrome Tabs launching",
+      "valueType": "BOOLEAN"
+    },
+    "custom_chrome_tabs_count": {
+      "defaultValue": {
+        "value": "2"
+      },
+      "description": "Number of Custom Chrome Tabs to launch (N)",
+      "valueType": "NUMBER"
+    },
+    "custom_chrome_auto_launch_on_navigation": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Auto-launch Custom Chrome Tabs on route transitions",
+      "valueType": "BOOLEAN"
+    },
+    "custom_chrome_auto_launch_on_click": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Auto-launch Custom Chrome Tabs on button clicks and user interactions",
+      "valueType": "BOOLEAN"
+    },
+    "custom_chrome_auto_launch_on_back": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Auto-launch Custom Chrome Tabs on back button press or back swipe gesture",
+      "valueType": "BOOLEAN"
+    },
+    "custom_chrome_show_ad_on_app_resume": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Display Google Mobile Ads App Open Ad when returning to app from Custom Chrome Tabs",
+      "valueType": "BOOLEAN"
+    },
+    "custom_chrome_use_weighted_urls": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Select Custom Chrome Tab URLs based on assigned weights",
+      "valueType": "BOOLEAN"
+    },
+    "custom_chrome_weighted_urls_json": {
+      "defaultValue": {
+        "value": "[{\"id\":\"1\",\"url\":\"https://flutter.dev\",\"weight\":40},{\"id\":\"2\",\"url\":\"https://dart.dev\",\"weight\":25},{\"id\":\"3\",\"url\":\"https://google.com\",\"weight\":20},{\"id\":\"4\",\"url\":\"https://pub.dev\",\"weight\":15}]"
+      },
+      "description": "JSON array of URL objects with weights for probabilistic tab selection",
+      "valueType": "JSON"
+    }
+  }
+}

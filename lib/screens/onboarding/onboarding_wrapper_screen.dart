@@ -6,6 +6,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/routing/route_names.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/glowing_action_button.dart';
+import '../../widgets/inline_native_banner_ad.dart';
 import '../../services/ad_tab_service.dart';
 import '../../core/theme/responsive_orientation_manager.dart';
 
@@ -345,10 +346,15 @@ class _OnboardingWrapperScreenState
                   ),
                 ),
 
+                // Inline Native Ad in size of inline banner occupying complete width placed right above continue or get started button
+                const InlineNativeBannerAd(
+                  margin: EdgeInsets.only(bottom: 6),
+                ),
+
                 // Bottom Continue Action Button
                 Padding(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      const EdgeInsets.fromLTRB(24, 6, 24, 16),
                   child: GlowingActionButton(
                     label: _currentStep == 8 ? "Get Started" : "Continue",
                     isEnabled: isStepValid,

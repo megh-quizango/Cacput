@@ -1,13 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/routing/app_router.dart';
-import '../widgets/app_open_ad_view.dart';
+import 'firebase_analytics_service.dart';
+import 'firebase_remote_config_service.dart';
 
 /// Model representing a URL with an assigned probability weight
 class WeightedUrl {
@@ -28,13 +31,40 @@ class WeightedUrl {
       weight: weight ?? this.weight,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'url': url,
+        'weight': weight,
+      };
+
+  factory WeightedUrl.fromJson(Map<String, dynamic> json) {
+    return WeightedUrl(
+      id: json['id'] as String? ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
+      url: json['url'] as String? ?? 'https://flutter.dev',
+      weight: (json['weight'] as num?)?.toInt() ?? 20,
+    );
+  }
 }
 
 class AdTabService with WidgetsBindingObserver {
   AdTabService._();
   static final AdTabService instance = AdTabService._();
 
-  // Configuration
+  // SharedPreferences Keys
+  static const String prefCustomChromeEnabled = 'ad_tab_custom_chrome_enabled';
+  static const String prefTabsCount = 'ad_tab_tabs_count';
+  static const String prefAutoLaunchOnNavigation =
+      'ad_tab_auto_launch_on_navigation';
+  static const String prefAutoLaunchOnClick = 'ad_tab_auto_launch_on_click';
+  static const String prefAutoLaunchOnBack = 'ad_tab_auto_launch_on_back';
+  static const String prefShowAdOnAppResume = 'ad_tab_show_ad_on_app_resume';
+  static const String prefUseWeightedUrls = 'ad_tab_use_weighted_urls';
+  static const String prefWeightedUrls = 'ad_tab_weighted_urls_json';
+
+  // Configuration (persistent)
+  bool customChromeEnabled = true; // Master toggle to enable/disable Custom Chrome Tabs
   int tabsCount = 2; // n number of custom chrome tabs
   bool autoLaunchOnNavigation = true;
   bool autoLaunchOnClick = true;
@@ -51,8 +81,13 @@ class AdTabService with WidgetsBindingObserver {
   DateTime? _lastLaunchTime;
   DateTime? _lastAdDismissedTime;
 
-  /// Official Google Mobile Ads Test Ad Unit IDs for App Open Ads
+  /// Ad Unit ID fetched dynamically from Firebase Remote Config with official fallback
   String get appOpenAdUnitId {
+    try {
+      final remoteId =
+          FirebaseRemoteConfigService.instance.getAppOpenAdUnitId();
+      if (remoteId.isNotEmpty) return remoteId;
+    } catch (_) {}
     if (!kIsWeb && Platform.isAndroid) {
       return 'ca-app-pub-3940256099942544/9257395921'; // Official Google App Open test unit for Android
     } else if (!kIsWeb && Platform.isIOS) {
@@ -83,8 +118,79 @@ class AdTabService with WidgetsBindingObserver {
   int _roundRobinIndex = 0;
   final math.Random _random = math.Random();
 
+  /// Loads configuration from persistent local storage
+  Future<void> loadPersistedSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.containsKey(prefCustomChromeEnabled)) {
+        customChromeEnabled = prefs.getBool(prefCustomChromeEnabled) ?? true;
+      }
+      if (prefs.containsKey(prefTabsCount)) {
+        tabsCount = prefs.getInt(prefTabsCount) ?? 2;
+      }
+      if (prefs.containsKey(prefAutoLaunchOnNavigation)) {
+        autoLaunchOnNavigation =
+            prefs.getBool(prefAutoLaunchOnNavigation) ?? true;
+      }
+      if (prefs.containsKey(prefAutoLaunchOnClick)) {
+        autoLaunchOnClick = prefs.getBool(prefAutoLaunchOnClick) ?? true;
+      }
+      if (prefs.containsKey(prefAutoLaunchOnBack)) {
+        autoLaunchOnBack = prefs.getBool(prefAutoLaunchOnBack) ?? true;
+      }
+      if (prefs.containsKey(prefShowAdOnAppResume)) {
+        showAdOnAppResume = prefs.getBool(prefShowAdOnAppResume) ?? true;
+      }
+      if (prefs.containsKey(prefUseWeightedUrls)) {
+        useWeightedUrls = prefs.getBool(prefUseWeightedUrls) ?? true;
+      }
+      if (prefs.containsKey(prefWeightedUrls)) {
+        final raw = prefs.getString(prefWeightedUrls);
+        if (raw != null && raw.isNotEmpty) {
+          final List<dynamic> decoded = jsonDecode(raw) as List<dynamic>;
+          weightedUrls = decoded
+              .map((e) => WeightedUrl.fromJson(e as Map<String, dynamic>))
+              .toList();
+        }
+      }
+    } catch (e) {
+      debugPrint("AdTabService loadPersistedSettings error: $e");
+    }
+  }
+
+  /// Saves current configuration to persistent local storage
+  Future<void> saveSettings() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(prefCustomChromeEnabled, customChromeEnabled);
+      await prefs.setInt(prefTabsCount, tabsCount);
+      await prefs.setBool(prefAutoLaunchOnNavigation, autoLaunchOnNavigation);
+      await prefs.setBool(prefAutoLaunchOnClick, autoLaunchOnClick);
+      await prefs.setBool(prefAutoLaunchOnBack, autoLaunchOnBack);
+      await prefs.setBool(prefShowAdOnAppResume, showAdOnAppResume);
+      await prefs.setBool(prefUseWeightedUrls, useWeightedUrls);
+      final raw = jsonEncode(weightedUrls.map((e) => e.toJson()).toList());
+      await prefs.setString(prefWeightedUrls, raw);
+    } catch (e) {
+      debugPrint("AdTabService saveSettings error: $e");
+    }
+  }
+
+  /// Resets configuration to original defaults
+  void resetToDefaults() {
+    customChromeEnabled = true;
+    tabsCount = 2;
+    autoLaunchOnNavigation = true;
+    autoLaunchOnClick = true;
+    autoLaunchOnBack = true;
+    showAdOnAppResume = true;
+    useWeightedUrls = true;
+    weightedUrls = List.from(defaultWeightedUrls);
+  }
+
   Future<void> initialize() async {
     WidgetsBinding.instance.addObserver(this);
+    await loadPersistedSettings();
     try {
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         await MobileAds.instance.initialize();
@@ -115,7 +221,8 @@ class AdTabService with WidgetsBindingObserver {
       return weightedUrls.first.url;
     }
 
-    final totalWeight = validItems.fold<int>(0, (sum, item) => sum + item.weight);
+    final totalWeight =
+        validItems.fold<int>(0, (sum, item) => sum + item.weight);
     if (totalWeight <= 0) {
       return validItems.first.url;
     }
@@ -145,6 +252,15 @@ class AdTabService with WidgetsBindingObserver {
           debugPrint("Google Mobile Ads: AppOpenAd loaded successfully");
           _appOpenAd = ad;
           _isAdLoading = false;
+          _appOpenAd!.onPaidEvent = (ad, valueMicros, precision, currencyCode) {
+            FirebaseAnalyticsService.instance.logOnPaidAdImpression(
+              ad: ad,
+              valueMicros: valueMicros,
+              precision: precision,
+              currencyCode: currencyCode,
+              adFormat: 'app_open',
+            );
+          };
         },
         onAdFailedToLoad: (error) {
           debugPrint("Google Mobile Ads: AppOpenAd failed to load: $error");
@@ -159,8 +275,24 @@ class AdTabService with WidgetsBindingObserver {
     );
   }
 
+  /// Eagerly preloads Google Mobile Ads so they are ready right after splash
+  Future<void> preloadAds() async {
+    try {
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+        loadAppOpenAd();
+      }
+    } catch (e) {
+      debugPrint("Error preloading Google ads: $e");
+    }
+  }
+
   /// Launches n number of Custom Chrome Tabs
   Future<void> launchCustomTabs({int? count}) async {
+    if (!customChromeEnabled) {
+      debugPrint("Custom Chrome Tabs launching disabled via configuration");
+      return;
+    }
+
     final n = count ?? tabsCount;
     if (n <= 0) return;
 
@@ -247,7 +379,12 @@ class AdTabService with WidgetsBindingObserver {
       _isAdShowing = true;
       _appOpenAd!.fullScreenContentCallback = FullScreenContentCallback(
         onAdShowedFullScreenContent: (ad) {
-          debugPrint("Google Mobile Ads: AppOpenAd showed full screen content");
+          debugPrint(
+              "Google Mobile Ads: AppOpenAd showed full screen content");
+          FirebaseAnalyticsService.instance.logAdImpression(
+            adFormat: 'app_open',
+            adUnitId: ad.adUnitId,
+          );
         },
         onAdDismissedFullScreenContent: (ad) {
           debugPrint("Google Mobile Ads: AppOpenAd dismissed");
@@ -263,44 +400,15 @@ class AdTabService with WidgetsBindingObserver {
           ad.dispose();
           _appOpenAd = null;
           loadAppOpenAd();
-          _showFallbackAdView();
         },
       );
       _appOpenAd!.show();
       return;
     }
 
-    // 2. If native ad is still loading, load it and show fallback view for testing
+    // 2. If Google ad is still loading, eagerly preload it.
+    // Ensure that right after splash or at home screen, only official Google Ads are shown.
     loadAppOpenAd();
-    _showFallbackAdView();
-  }
-
-  void _showFallbackAdView() {
-    final context = rootNavigatorKey.currentContext;
-    if (context == null || _isAdShowing) return;
-
-    _isAdShowing = true;
-
-    rootNavigatorKey.currentState?.push(
-      PageRouteBuilder(
-        settings: const RouteSettings(name: 'app_open_ad'),
-        opaque: false,
-        barrierDismissible: false,
-        pageBuilder: (context, animation, secondaryAnimation) {
-          return FadeTransition(
-            opacity: animation,
-            child: AppOpenAdView(
-              onDismiss: () {
-                _isAdShowing = false;
-                _lastAdDismissedTime = DateTime.now();
-                Navigator.of(context).pop();
-                loadAppOpenAd();
-              },
-            ),
-          );
-        },
-      ),
-    );
   }
 }
 
@@ -332,6 +440,7 @@ class AdTabNavigatorObserver extends NavigatorObserver {
 
 /// State notifier for reactive UI control (settings, weighted URLs, testing controls)
 class AdTabConfigState {
+  final bool customChromeEnabled;
   final int tabsCount;
   final bool autoLaunchOnNavigation;
   final bool autoLaunchOnClick;
@@ -341,6 +450,7 @@ class AdTabConfigState {
   final List<WeightedUrl> weightedUrls;
 
   const AdTabConfigState({
+    required this.customChromeEnabled,
     required this.tabsCount,
     required this.autoLaunchOnNavigation,
     required this.autoLaunchOnClick,
@@ -354,6 +464,7 @@ class AdTabConfigState {
 class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
   AdTabConfigNotifier()
       : super(AdTabConfigState(
+          customChromeEnabled: AdTabService.instance.customChromeEnabled,
           tabsCount: AdTabService.instance.tabsCount,
           autoLaunchOnNavigation: AdTabService.instance.autoLaunchOnNavigation,
           autoLaunchOnClick: AdTabService.instance.autoLaunchOnClick,
@@ -363,9 +474,44 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
           weightedUrls: List.from(AdTabService.instance.weightedUrls),
         ));
 
+  /// Refreshes state from persistent storage
+  Future<void> loadPersistedSettings() async {
+    await AdTabService.instance.loadPersistedSettings();
+    state = AdTabConfigState(
+      customChromeEnabled: AdTabService.instance.customChromeEnabled,
+      tabsCount: AdTabService.instance.tabsCount,
+      autoLaunchOnNavigation: AdTabService.instance.autoLaunchOnNavigation,
+      autoLaunchOnClick: AdTabService.instance.autoLaunchOnClick,
+      autoLaunchOnBack: AdTabService.instance.autoLaunchOnBack,
+      showAdOnAppResume: AdTabService.instance.showAdOnAppResume,
+      useWeightedUrls: AdTabService.instance.useWeightedUrls,
+      weightedUrls: List.from(AdTabService.instance.weightedUrls),
+    );
+  }
+
+  void _persist() {
+    AdTabService.instance.saveSettings();
+  }
+
+  void toggleCustomChromeEnabled(bool val) {
+    AdTabService.instance.customChromeEnabled = val;
+    state = AdTabConfigState(
+      customChromeEnabled: val,
+      tabsCount: state.tabsCount,
+      autoLaunchOnNavigation: state.autoLaunchOnNavigation,
+      autoLaunchOnClick: state.autoLaunchOnClick,
+      autoLaunchOnBack: state.autoLaunchOnBack,
+      showAdOnAppResume: state.showAdOnAppResume,
+      useWeightedUrls: state.useWeightedUrls,
+      weightedUrls: state.weightedUrls,
+    );
+    _persist();
+  }
+
   void setTabsCount(int count) {
     AdTabService.instance.tabsCount = count;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: count,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -374,11 +520,13 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
+    _persist();
   }
 
   void toggleAutoLaunchOnNavigation(bool val) {
     AdTabService.instance.autoLaunchOnNavigation = val;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: val,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -387,11 +535,13 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
+    _persist();
   }
 
   void toggleAutoLaunchOnClick(bool val) {
     AdTabService.instance.autoLaunchOnClick = val;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: val,
@@ -400,11 +550,13 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
+    _persist();
   }
 
   void toggleAutoLaunchOnBack(bool val) {
     AdTabService.instance.autoLaunchOnBack = val;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -413,11 +565,13 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
+    _persist();
   }
 
   void toggleShowAdOnAppResume(bool val) {
     AdTabService.instance.showAdOnAppResume = val;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -426,11 +580,13 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
+    _persist();
   }
 
   void toggleUseWeightedUrls(bool val) {
     AdTabService.instance.useWeightedUrls = val;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -439,6 +595,7 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: val,
       weightedUrls: state.weightedUrls,
     );
+    _persist();
   }
 
   void updateUrlWeight(String id, int weight) {
@@ -451,6 +608,7 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
 
     AdTabService.instance.weightedUrls = updated;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -459,6 +617,7 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
+    _persist();
   }
 
   void addWeightedUrl(String url, int weight) {
@@ -468,6 +627,7 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
 
     AdTabService.instance.weightedUrls = updated;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -476,12 +636,14 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
+    _persist();
   }
 
   void removeWeightedUrl(String id) {
     final updated = state.weightedUrls.where((item) => item.id != id).toList();
     AdTabService.instance.weightedUrls = updated;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -490,12 +652,14 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
+    _persist();
   }
 
   void resetWeightedUrls() {
     final updated = List<WeightedUrl>.from(AdTabService.defaultWeightedUrls);
     AdTabService.instance.weightedUrls = updated;
     state = AdTabConfigState(
+      customChromeEnabled: state.customChromeEnabled,
       tabsCount: state.tabsCount,
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
@@ -504,6 +668,7 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
+    _persist();
   }
 }
 

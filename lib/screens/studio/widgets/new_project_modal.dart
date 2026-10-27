@@ -29,89 +29,94 @@ class NewProjectModal extends ConsumerWidget {
           top: BorderSide(color: AppColors.cardBorder, width: 1.2),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 36),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Drag handle
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.cardBorder,
-                borderRadius: BorderRadius.circular(2),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBorder,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-          // Header matching screen 31
-          Text(
-            "New Project",
-            style: AppTypography.titleLarge.copyWith(fontSize: 22),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Choose how you want to start editing",
-            style: AppTypography.bodyMedium,
-          ),
-          const SizedBox(height: 24),
+              // Header matching screen 31
+              Text(
+                "New Project",
+                style: AppTypography.titleLarge.copyWith(fontSize: 22),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "Choose how you want to start editing",
+                style: AppTypography.bodyMedium,
+              ),
+              const SizedBox(height: 24),
 
-          // Option 1: Browse Templates (Screen 31)
-          _buildOptionTile(
-            context: context,
-            icon: Icons.dashboard_customize_rounded,
-            accentColor: AppColors.brandPink,
-            title: "Browse Templates",
-            subtitle: "Start from a ready-made template",
-            onTap: () {
-              Navigator.pop(context);
-              context.go(RouteNames.explore);
-            },
-          ),
-          const SizedBox(height: 12),
+              // Option 1: Browse Templates (Screen 31)
+              _buildOptionTile(
+                context: context,
+                icon: Icons.dashboard_customize_rounded,
+                accentColor: AppColors.brandPink,
+                title: "Browse Templates",
+                subtitle: "Start from a ready-made template",
+                onTap: () {
+                  Navigator.pop(context);
+                  context.go(RouteNames.explore);
+                },
+              ),
+              const SizedBox(height: 12),
 
-          // Option 2: Blank Canvas (Screen 31)
-          _buildOptionTile(
-            context: context,
-            icon: Icons.crop_portrait_rounded,
-            accentColor: AppColors.brandCyan,
-            title: "Blank Canvas",
-            subtitle: "Empty canvas — no gallery needed",
-            onTap: () {
-              Navigator.pop(context);
-              final project = ref.read(projectProvider.notifier).createDraftFromTemplate(
-                title: "Blank Project",
-                thumbnailAsset: AppConstants.sampleForestAsset,
-                aspectRatio: "9:16",
-              );
-              ref.read(currentEditingProjectProvider.notifier).state = project;
-              context.push(RouteNames.editor);
-            },
-          ),
-          const SizedBox(height: 12),
+              // Option 2: Blank Canvas (Screen 31)
+              _buildOptionTile(
+                context: context,
+                icon: Icons.crop_portrait_rounded,
+                accentColor: AppColors.brandCyan,
+                title: "Blank Canvas",
+                subtitle: "Empty canvas — no gallery needed",
+                onTap: () {
+                  Navigator.pop(context);
+                  final project = ref.read(projectProvider.notifier).createDraftFromTemplate(
+                    title: "Blank Project",
+                    thumbnailAsset: AppConstants.sampleForestAsset,
+                    aspectRatio: "9:16",
+                  );
+                  ref.read(currentEditingProjectProvider.notifier).state = project;
+                  context.push(RouteNames.editor);
+                },
+              ),
+              const SizedBox(height: 12),
 
-          // Option 3: Sample Photo (Screen 31)
-          _buildOptionTile(
-            context: context,
-            icon: Icons.photo_camera_back_rounded,
-            accentColor: AppColors.brandGold,
-            title: "Sample Photo",
-            subtitle: "Try editing with a built-in sample",
-            onTap: () {
-              Navigator.pop(context);
-              final project = ref.read(projectProvider.notifier).createDraftFromTemplate(
+              // Option 3: Sample Photo (Screen 31)
+              _buildOptionTile(
+                context: context,
+                icon: Icons.photo_camera_back_rounded,
+                accentColor: AppColors.brandGold,
                 title: "Sample Photo",
-                thumbnailAsset: AppConstants.sampleLakeAsset,
-                aspectRatio: "9:16",
-              );
-              ref.read(currentEditingProjectProvider.notifier).state = project;
-              context.push(RouteNames.editor);
-            },
+                subtitle: "Try editing with a built-in sample",
+                onTap: () {
+                  Navigator.pop(context);
+                  final project = ref.read(projectProvider.notifier).createDraftFromTemplate(
+                    title: "Sample Photo",
+                    thumbnailAsset: AppConstants.sampleLakeAsset,
+                    aspectRatio: "9:16",
+                  );
+                  ref.read(currentEditingProjectProvider.notifier).state = project;
+                  context.push(RouteNames.editor);
+                },
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

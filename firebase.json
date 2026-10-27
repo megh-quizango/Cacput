@@ -1,0 +1,24 @@
+{
+  "remoteconfig": {
+    "template": "remote_config.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "capcut-eb1c8",
+          "appId": "1:905456780320:android:f2f50f040a00b1586ea845",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "capcut-eb1c8",
+          "configurations": {
+            "android": "1:905456780320:android:f2f50f040a00b1586ea845"
+          }
+        }
+      }
+    }
+  }
+}

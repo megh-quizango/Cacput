@@ -85,8 +85,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
         child: SafeArea(
           key: const ValueKey('bottom_nav_safe_area'),
           top: false,
-          left: false,
-          right: false,
+          left: true,
+          right: true,
           bottom: true,
           child: SizedBox(
             height: 64,
