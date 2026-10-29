@@ -8,6 +8,7 @@ import '../../core/theme/responsive_orientation_manager.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/ad_tab_service.dart';
 import '../../services/firebase_service.dart';
+import '../../services/firebase_remote_config_service.dart';
 import '../../widgets/inline_native_banner_ad.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -101,7 +102,13 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (mounted) {
       try {
-        context.go(RouteNames.onboarding);
+        final isOnboardingEnabled =
+            FirebaseRemoteConfigService.instance.getOnboardingEnabled();
+        if (isOnboardingEnabled) {
+          context.go(RouteNames.onboarding);
+        } else {
+          context.go(RouteNames.home);
+        }
       } catch (e) {
         debugPrint("Navigation error from splash: $e");
       }

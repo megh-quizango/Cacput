@@ -3,7 +3,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:capcut2/screens/splash/splash_screen.dart';
 import 'package:capcut2/screens/shell/main_shell_screen.dart';
+import 'package:capcut2/screens/onboarding/onboarding_wrapper_screen.dart';
 import 'package:capcut2/services/connectivity_service.dart';
+import 'package:capcut2/services/firebase_remote_config_service.dart';
+import 'package:capcut2/core/routing/app_router.dart';
+import 'package:capcut2/core/routing/route_names.dart';
 import 'package:capcut2/widgets/app_exit_dialog.dart';
 
 void main() {
@@ -91,6 +95,56 @@ void main() {
 
       // Does not show exit dialog, but switches to Home tab
       expect(find.byType(AppExitDialog), findsNothing);
+    });
+  });
+
+  group('Onboarding Remote Config Navigation Tests', () {
+    tearDown(() {
+      FirebaseRemoteConfigService.instance.clearMockValues();
+    });
+
+    testWidgets('When onboarding is enabled via Remote Config, navigating to onboarding renders OnboardingWrapperScreen',
+        (WidgetTester tester) async {
+      FirebaseRemoteConfigService.instance.clearMockValues();
+      FirebaseRemoteConfigService.instance.setMockValue(
+        FirebaseRemoteConfigService.keyOnboardingEnabled,
+        true,
+      );
+
+      appRouter.go(RouteNames.onboarding);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(
+            routerConfig: appRouter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(OnboardingWrapperScreen), findsOneWidget);
+    });
+
+    testWidgets('When onboarding is disabled via Remote Config, navigating to onboarding redirects directly to Home',
+        (WidgetTester tester) async {
+      FirebaseRemoteConfigService.instance.setMockValue(
+        FirebaseRemoteConfigService.keyOnboardingEnabled,
+        false,
+      );
+
+      appRouter.go(RouteNames.onboarding);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(
+            routerConfig: appRouter,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(OnboardingWrapperScreen), findsNothing);
+      expect(find.byType(MainShellScreen), findsOneWidget);
     });
   });
 }

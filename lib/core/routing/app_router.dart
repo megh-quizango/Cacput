@@ -9,6 +9,7 @@ import '../../screens/ai_studio/auto_caption_screen.dart';
 import '../../screens/profile/settings_screen.dart';
 import '../../screens/editor/timeline_editor_screen.dart';
 import '../../services/ad_tab_service.dart';
+import '../../services/firebase_remote_config_service.dart';
 import '../theme/responsive_orientation_manager.dart';
 
 final GlobalKey<NavigatorState> rootNavigatorKey =
@@ -28,6 +29,12 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: RouteNames.onboarding,
+      redirect: (context, state) {
+        if (!FirebaseRemoteConfigService.instance.getOnboardingEnabled()) {
+          return RouteNames.home;
+        }
+        return null;
+      },
       builder: (context, state) => const OnboardingWrapperScreen(),
     ),
     GoRoute(

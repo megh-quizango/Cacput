@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:capcut2/services/ad_tab_service.dart';
+import 'package:capcut2/services/firebase_remote_config_service.dart';
 import 'package:capcut2/widgets/app_open_ad_view.dart';
 import 'package:capcut2/widgets/app_exit_dialog.dart';
 
@@ -166,7 +167,12 @@ void main() {
   });
 
   group('AppOpenAdView Widget Tests', () {
-    testWidgets('Renders App Open Ad with branding, countdown and dismiss actions',
+    tearDown(() {
+      FirebaseRemoteConfigService.instance.clearMockValues();
+      AdTabService.instance.resetToDefaults();
+    });
+
+    testWidgets('Renders App Open Ad with branding, countdown and dismiss actions when enabled',
         (tester) async {
       bool dismissed = false;
 
@@ -190,6 +196,35 @@ void main() {
       await tester.tap(find.text('Continue to App'));
       await tester.pumpAndSettle();
 
+      expect(dismissed, isTrue);
+    });
+
+    testWidgets('Neither renders nor appears when App Open Ads are disabled via Remote Config',
+        (tester) async {
+      bool dismissed = false;
+
+      // Disable App Open Ads via Remote Config
+      FirebaseRemoteConfigService.instance.setMockValue(
+        FirebaseRemoteConfigService.keyAppOpenAdEnabled,
+        false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: AppOpenAdView(
+            onDismiss: () {
+              dismissed = true;
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      // Custom app open ad does NOT appear
+      expect(find.text('PhotoVideoCourse'), findsNothing);
+      expect(find.text('AI Creative Studio Pro'), findsNothing);
+      expect(find.text('Continue to App'), findsNothing);
+      expect(find.byType(Scaffold), findsNothing);
       expect(dismissed, isTrue);
     });
   });

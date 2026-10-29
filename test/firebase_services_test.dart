@@ -65,6 +65,56 @@ void main() {
       expect(weightedUrls.any((u) => u.url == 'https://pub.dev'), isTrue);
     });
 
+    test('Remote Config controls onboarding screens enable/disable master toggle', () {
+      final rc = FirebaseRemoteConfigService.instance;
+      rc.clearMockValues();
+
+      // Verify default parameter exists and is enabled
+      expect(rc.getBool(FirebaseRemoteConfigService.keyOnboardingEnabled), isTrue);
+      expect(rc.getOnboardingEnabled(), isTrue);
+      expect(rc.isOnboardingEnabled(), isTrue);
+
+      // Verify toggle can disable onboarding screens
+      rc.setMockValue(FirebaseRemoteConfigService.keyOnboardingEnabled, false);
+      expect(rc.getOnboardingEnabled(), isFalse);
+      expect(rc.isOnboardingEnabled(), isFalse);
+
+      // Reset mock overrides
+      rc.clearMockValues();
+      expect(rc.getOnboardingEnabled(), isTrue);
+    });
+
+    test('Remote Config controls app open ads master toggle and suppresses requests when disabled', () {
+      final rc = FirebaseRemoteConfigService.instance;
+      final adService = AdTabService.instance;
+      rc.clearMockValues();
+      adService.resetToDefaults();
+
+      // Verify default parameter exists and is enabled
+      expect(rc.getBool(FirebaseRemoteConfigService.keyAppOpenAdEnabled), isTrue);
+      expect(rc.getAppOpenAdEnabled(), isTrue);
+      expect(rc.isAppOpenAdEnabled(), isTrue);
+      expect(adService.isAppOpenAdEnabled, isTrue);
+
+      // Verify toggle disables App Open Ads
+      rc.setMockValue(FirebaseRemoteConfigService.keyAppOpenAdEnabled, false);
+      expect(rc.getAppOpenAdEnabled(), isFalse);
+      expect(rc.isAppOpenAdEnabled(), isFalse);
+      expect(adService.isAppOpenAdEnabled, isFalse);
+
+      // Ensure no ad request is sent when disabled
+      final initialRequests = adService.appOpenAdRequestCount;
+      adService.loadAppOpenAd();
+      adService.preloadAds();
+      adService.showAppOpenAd();
+      expect(adService.appOpenAdRequestCount, equals(initialRequests));
+
+      // Reset mock overrides
+      rc.clearMockValues();
+      expect(rc.getAppOpenAdEnabled(), isTrue);
+      expect(adService.isAppOpenAdEnabled, isTrue);
+    });
+
     test('AdTabService and InlineNativeBannerAd pull ad unit IDs dynamically from Remote Config', () {
       expect(AdTabService.instance.appOpenAdUnitId, isNotEmpty);
       expect(InlineNativeBannerAd.testAdUnitId, isNotEmpty);

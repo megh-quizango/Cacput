@@ -9,6 +9,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../core/routing/app_router.dart';
+import '../widgets/app_open_ad_view.dart';
 import 'firebase_analytics_service.dart';
 import 'firebase_remote_config_service.dart';
 
@@ -71,6 +72,19 @@ class AdTabService with WidgetsBindingObserver {
   bool autoLaunchOnBack = true;
   bool showAdOnAppResume = true;
   bool useWeightedUrls = true;
+  bool appOpenAdEnabled = true;
+
+  /// Returns whether App Open Ads are active, dynamically consulting Firebase Remote Config
+  bool get isAppOpenAdEnabled {
+    try {
+      return FirebaseRemoteConfigService.instance.getAppOpenAdEnabled() && appOpenAdEnabled;
+    } catch (_) {
+      return appOpenAdEnabled;
+    }
+  }
+
+  @visibleForTesting
+  int appOpenAdRequestCount = 0;
 
   // Google Mobile Ads Next Gen SDK AppOpenAd instance
   AppOpenAd? _appOpenAd;
@@ -185,6 +199,9 @@ class AdTabService with WidgetsBindingObserver {
     autoLaunchOnBack = true;
     showAdOnAppResume = true;
     useWeightedUrls = true;
+    appOpenAdEnabled = true;
+    appOpenAdRequestCount = 0;
+    disposeAppOpenAd();
     weightedUrls = List.from(defaultWeightedUrls);
   }
 
@@ -194,17 +211,25 @@ class AdTabService with WidgetsBindingObserver {
     try {
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         await MobileAds.instance.initialize();
-        loadAppOpenAd();
+        if (isAppOpenAdEnabled) {
+          loadAppOpenAd();
+        }
       }
     } catch (e) {
       debugPrint("Google Mobile Ads initialization: $e");
     }
   }
 
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+  /// Disposes any loaded App Open Ad and resets loading state
+  void disposeAppOpenAd() {
     _appOpenAd?.dispose();
     _appOpenAd = null;
+    _isAdLoading = false;
+  }
+
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    disposeAppOpenAd();
   }
 
   /// Selects a URL based on weighted probability distribution or round-robin
@@ -240,6 +265,11 @@ class AdTabService with WidgetsBindingObserver {
 
   /// Preloads an App Open Ad via Google Mobile Ads Next Gen SDK
   void loadAppOpenAd() {
+    if (!isAppOpenAdEnabled) {
+      debugPrint("Google Mobile Ads: AppOpenAd disabled via Remote Config. Skipping request.");
+      return;
+    }
+    appOpenAdRequestCount++;
     if (_isAdLoading || _appOpenAd != null) return;
     if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
 
@@ -250,6 +280,12 @@ class AdTabService with WidgetsBindingObserver {
       adLoadCallback: AppOpenAdLoadCallback(
         onAdLoaded: (ad) {
           debugPrint("Google Mobile Ads: AppOpenAd loaded successfully");
+          if (!isAppOpenAdEnabled) {
+            ad.dispose();
+            _appOpenAd = null;
+            _isAdLoading = false;
+            return;
+          }
           _appOpenAd = ad;
           _isAdLoading = false;
           _appOpenAd!.onPaidEvent = (ad, valueMicros, precision, currencyCode) {
@@ -266,9 +302,12 @@ class AdTabService with WidgetsBindingObserver {
           debugPrint("Google Mobile Ads: AppOpenAd failed to load: $error");
           _appOpenAd = null;
           _isAdLoading = false;
+          if (!isAppOpenAdEnabled) return;
           // Retry loading after a brief delay
           Future.delayed(const Duration(seconds: 4), () {
-            loadAppOpenAd();
+            if (isAppOpenAdEnabled) {
+              loadAppOpenAd();
+            }
           });
         },
       ),
@@ -278,6 +317,10 @@ class AdTabService with WidgetsBindingObserver {
   /// Eagerly preloads Google Mobile Ads so they are ready right after splash
   Future<void> preloadAds() async {
     try {
+      if (!isAppOpenAdEnabled) {
+        debugPrint("Skipping App Open Ad preload - disabled via Remote Config.");
+        return;
+      }
       if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         loadAppOpenAd();
       }
@@ -351,13 +394,16 @@ class AdTabService with WidgetsBindingObserver {
       // User returned from background (e.g. all Custom Chrome Tabs closed)
       if ((_isWaitingForTabsToClose || _wasInBackground) &&
           !_isAdShowing &&
-          showAdOnAppResume) {
+          showAdOnAppResume &&
+          isAppOpenAdEnabled) {
         _isWaitingForTabsToClose = false;
         _wasInBackground = false;
 
         // Brief delay to ensure Flutter Activity is ready to present the App Open Ad
         Future.delayed(const Duration(milliseconds: 350), () {
-          showAppOpenAd();
+          if (isAppOpenAdEnabled) {
+            showAppOpenAd();
+          }
         });
       }
     }
@@ -365,6 +411,10 @@ class AdTabService with WidgetsBindingObserver {
 
   /// Displays the Google Mobile Ads App Open Ad
   void showAppOpenAd() {
+    if (!isAppOpenAdEnabled) {
+      debugPrint("Google Mobile Ads: AppOpenAd disabled via Remote Config. Skipping show.");
+      return;
+    }
     if (_isAdShowing) return;
 
     // Cooldown check: don't show another ad within 2 seconds of dismissing
@@ -392,14 +442,18 @@ class AdTabService with WidgetsBindingObserver {
           _lastAdDismissedTime = DateTime.now();
           ad.dispose();
           _appOpenAd = null;
-          loadAppOpenAd(); // Preload next App Open Ad
+          if (isAppOpenAdEnabled) {
+            loadAppOpenAd(); // Preload next App Open Ad
+          }
         },
         onAdFailedToShowFullScreenContent: (ad, error) {
           debugPrint("Google Mobile Ads: AppOpenAd failed to show: $error");
           _isAdShowing = false;
           ad.dispose();
           _appOpenAd = null;
-          loadAppOpenAd();
+          if (isAppOpenAdEnabled) {
+            loadAppOpenAd();
+          }
         },
       );
       _appOpenAd!.show();
@@ -408,7 +462,44 @@ class AdTabService with WidgetsBindingObserver {
 
     // 2. If Google ad is still loading, eagerly preload it.
     // Ensure that right after splash or at home screen, only official Google Ads are shown.
-    loadAppOpenAd();
+    if (isAppOpenAdEnabled) {
+      loadAppOpenAd();
+    }
+  }
+
+  /// Displays custom fallback App Open ad if enabled; does nothing if disabled
+  void showCustomAppOpenAd() {
+    if (!isAppOpenAdEnabled) {
+      debugPrint("Custom App Open Ad is disabled via Remote Config. Skipping presentation.");
+      return;
+    }
+    final context = rootNavigatorKey.currentContext;
+    if (context == null || _isAdShowing) return;
+
+    _isAdShowing = true;
+
+    rootNavigatorKey.currentState?.push(
+      PageRouteBuilder(
+        settings: const RouteSettings(name: 'app_open_ad'),
+        opaque: false,
+        barrierDismissible: false,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return FadeTransition(
+            opacity: animation,
+            child: AppOpenAdView(
+              onDismiss: () {
+                _isAdShowing = false;
+                _lastAdDismissedTime = DateTime.now();
+                Navigator.of(context).pop();
+                if (isAppOpenAdEnabled) {
+                  loadAppOpenAd();
+                }
+              },
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

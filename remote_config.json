@@ -28,6 +28,13 @@
       "description": "Google AdMob App Open Ad unit ID for iOS",
       "valueType": "STRING"
     },
+    "app_open_ad_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Master switch to enable or disable App Open Ads (when disabled, no ad requests are sent and neither Google nor custom app open ads appear)",
+      "valueType": "BOOLEAN"
+    },
     "ad_unit_banner_android": {
       "defaultValue": {
         "value": "ca-app-pub-3940256099942544/6300978111"
@@ -69,6 +76,13 @@
       },
       "description": "Google AdMob Rewarded Ad unit ID for iOS",
       "valueType": "STRING"
+    },
+    "onboarding_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "description": "Master switch to enable or disable onboarding screens flow (navigates directly to Home when disabled)",
+      "valueType": "BOOLEAN"
     },
     "custom_chrome_enabled": {
       "defaultValue": {

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_typography.dart';
+import '../services/ad_tab_service.dart';
 
 class AppOpenAdView extends StatefulWidget {
   final VoidCallback onDismiss;
@@ -22,6 +23,12 @@ class _AppOpenAdViewState extends State<AppOpenAdView> {
   @override
   void initState() {
     super.initState();
+    if (!AdTabService.instance.isAppOpenAdEnabled) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onDismiss();
+      });
+      return;
+    }
     _startCountdown();
   }
 
@@ -45,6 +52,9 @@ class _AppOpenAdViewState extends State<AppOpenAdView> {
 
   @override
   Widget build(BuildContext context) {
+    if (!AdTabService.instance.isAppOpenAdEnabled) {
+      return const SizedBox.shrink();
+    }
     return Scaffold(
       backgroundColor: const Color(0xFF090911),
       body: SafeArea(

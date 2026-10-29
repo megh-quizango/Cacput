@@ -30,6 +30,10 @@ class FirebaseRemoteConfigService {
   static const String keyRewardedAdAndroid = 'ad_unit_rewarded_android';
   static const String keyRewardedAdIos = 'ad_unit_rewarded_ios';
 
+  static const String keyAppOpenAdEnabled = 'app_open_ad_enabled';
+  static const String keyAppOpenAdsEnabled = 'app_open_ads_enabled';
+  static const String keyOnboardingEnabled = 'onboarding_enabled';
+
   static const String keyCustomChromeEnabled = 'custom_chrome_enabled';
   static const String keyCustomChromeTabsCount = 'custom_chrome_tabs_count';
   static const String keyAutoLaunchOnNavigation = 'custom_chrome_auto_launch_on_navigation';
@@ -51,6 +55,8 @@ class FirebaseRemoteConfigService {
     keyInterstitialAdIos: 'ca-app-pub-3940256099942544/4411468910',
     keyRewardedAdAndroid: 'ca-app-pub-3940256099942544/5224354917',
     keyRewardedAdIos: 'ca-app-pub-3940256099942544/1712485313',
+    keyAppOpenAdEnabled: true,
+    keyOnboardingEnabled: true,
     keyCustomChromeEnabled: true,
     keyCustomChromeTabsCount: 2,
     keyAutoLaunchOnNavigation: true,
@@ -133,6 +139,11 @@ class FirebaseRemoteConfigService {
       AdTabService.instance.autoLaunchOnBack = autoBack;
       AdTabService.instance.showAdOnAppResume = showResumeAd;
       AdTabService.instance.useWeightedUrls = useWeights;
+      final isAppOpenEnabled = getAppOpenAdEnabled();
+      AdTabService.instance.appOpenAdEnabled = isAppOpenEnabled;
+      if (!isAppOpenEnabled) {
+        AdTabService.instance.disposeAppOpenAd();
+      }
       if (urls.isNotEmpty) {
         AdTabService.instance.weightedUrls = urls;
       }
@@ -180,6 +191,39 @@ class FirebaseRemoteConfigService {
     return getString(keyRewardedAdAndroid);
   }
 
+  // --- App Flow & Feature Lookups ---
+
+  /// Determines if App Open Ads (both Google Mobile Ads requests and custom App Open views) are enabled.
+  /// When disabled, no ad requests are sent and no custom app open ad appears.
+  bool getAppOpenAdEnabled() {
+    if (mockOverrides.containsKey(keyAppOpenAdEnabled)) {
+      return mockOverrides[keyAppOpenAdEnabled] as bool;
+    }
+    if (mockOverrides.containsKey(keyAppOpenAdsEnabled)) {
+      return mockOverrides[keyAppOpenAdsEnabled] as bool;
+    }
+    if (_remoteConfig != null) {
+      final all = _remoteConfig!.getAll();
+      if (all.containsKey(keyAppOpenAdEnabled)) {
+        return _remoteConfig!.getBool(keyAppOpenAdEnabled);
+      }
+      if (all.containsKey(keyAppOpenAdsEnabled)) {
+        return _remoteConfig!.getBool(keyAppOpenAdsEnabled);
+      }
+    }
+    return (defaultParameters[keyAppOpenAdEnabled] as bool?) ?? true;
+  }
+
+  bool isAppOpenAdEnabled() => getAppOpenAdEnabled();
+
+  /// Determines if onboarding screens flow is enabled.
+  /// When disabled, the app bypasses onboarding and navigates directly to Home.
+  bool getOnboardingEnabled() {
+    return getBool(keyOnboardingEnabled);
+  }
+
+  bool isOnboardingEnabled() => getOnboardingEnabled();
+
   // --- Custom Chrome & Behavior Lookups ---
 
   bool getCustomChromeEnabled() {
@@ -203,9 +247,27 @@ class FirebaseRemoteConfigService {
     return List.from(AdTabService.defaultWeightedUrls);
   }
 
+  // --- Test & Mock Overrides ---
+
+  @visibleForTesting
+  final Map<String, dynamic> mockOverrides = {};
+
+  @visibleForTesting
+  void setMockValue(String key, dynamic value) {
+    mockOverrides[key] = value;
+  }
+
+  @visibleForTesting
+  void clearMockValues() {
+    mockOverrides.clear();
+  }
+
   // --- Value Getters with In-App Fallbacks ---
 
   String getString(String key) {
+    if (mockOverrides.containsKey(key)) {
+      return mockOverrides[key] as String;
+    }
     if (_remoteConfig != null) {
       final val = _remoteConfig!.getString(key);
       if (val.isNotEmpty) return val;
@@ -214,6 +276,9 @@ class FirebaseRemoteConfigService {
   }
 
   bool getBool(String key) {
+    if (mockOverrides.containsKey(key)) {
+      return mockOverrides[key] as bool;
+    }
     if (_remoteConfig != null) {
       return _remoteConfig!.getBool(key);
     }
@@ -221,6 +286,9 @@ class FirebaseRemoteConfigService {
   }
 
   int getInt(String key) {
+    if (mockOverrides.containsKey(key)) {
+      return mockOverrides[key] as int;
+    }
     if (_remoteConfig != null) {
       final val = _remoteConfig!.getInt(key);
       if (val > 0) return val;
@@ -229,6 +297,9 @@ class FirebaseRemoteConfigService {
   }
 
   double getDouble(String key) {
+    if (mockOverrides.containsKey(key)) {
+      return mockOverrides[key] as double;
+    }
     if (_remoteConfig != null) {
       return _remoteConfig!.getDouble(key);
     }
