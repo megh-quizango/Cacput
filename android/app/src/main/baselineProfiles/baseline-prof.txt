@@ -1,0 +1,20 @@
+# Baseline profile for ART ahead-of-time compilation on install/first launch.
+HSPLcom/creativemedia/capcut/**;->**(**)**
+Lcom/creativemedia/capcut/**;
+HSPLandroidx/browser/customtabs/**;->**(**)**
+Landroidx/browser/customtabs/**;
+HSPLio/flutter/embedding/**;->**(**)**
+Lio/flutter/embedding/**;
+HSPLio/flutter/plugin/**;->**(**)**
+Lio/flutter/plugin/**;
+HSPLio/flutter/plugins/GeneratedPluginRegistrant;->**(**)**
+HSPLio/flutter/plugins/firebase/**;->**(**)**
+HSPLio/flutter/plugins/googlemobileads/**;->**(**)**
+HSPLio/flutter/plugins/sharedpreferences/**;->**(**)**
+HSPLio/flutter/plugins/urllauncher/**;->**(**)**
+HSPLio/flutter/plugins/webviewflutter/**;->**(**)**
+HSPLdev/fluttercommunity/plus/**;->**(**)**
+HSPLcom/google/android/gms/ads/MobileAds;->**(**)**
+HSPLcom/google/android/gms/ads/AdLoader**;->**(**)**
+HSPLcom/google/android/gms/ads/appopen/**;->**(**)**
+HSPLcom/google/firebase/**;->**(**)**

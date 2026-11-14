@@ -4,8 +4,7 @@ import 'app_colors.dart';
 import 'app_typography.dart';
 
 class AppTheme {
-  static ThemeData get darkTheme {
-    return ThemeData(
+  static final ThemeData darkTheme = ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.canvasBackground,
@@ -71,5 +70,4 @@ class AppTheme {
       splashColor: AppColors.brandPink.withOpacity(0.12),
       highlightColor: Colors.transparent,
     );
-  }
 }

@@ -1,0 +1,28 @@
+# Startup profile used by R8 DEX layout optimization and ART cold-start precompilation.
+# Must use exact ART profile descriptors (no wildcards).
+Lcom/creativemedia/capcut/MainActivity;
+HSPLcom/creativemedia/capcut/MainActivity;-><init>()V
+Lio/flutter/embedding/android/FlutterActivity;
+HSPLio/flutter/embedding/android/FlutterActivity;-><init>()V
+HSPLio/flutter/embedding/android/FlutterActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLio/flutter/embedding/android/FlutterActivity;->onStart()V
+HSPLio/flutter/embedding/android/FlutterActivity;->onResume()V
+HSPLio/flutter/embedding/android/FlutterActivity;->configureFlutterEngine(Lio/flutter/embedding/engine/FlutterEngine;)V
+HSPLio/flutter/embedding/android/FlutterActivityAndFragmentDelegate;->onAttach(Landroid/content/Context;)V
+HSPLio/flutter/embedding/android/FlutterActivityAndFragmentDelegate;->onCreateView(Landroid/view/LayoutInflater;Landroid/view/ViewGroup;Landroid/os/Bundle;IZ)Landroid/view/View;
+HSPLio/flutter/embedding/android/FlutterView;-><init>(Landroid/content/Context;Lio/flutter/embedding/android/FlutterSurfaceView;)V
+HSPLio/flutter/embedding/android/FlutterView;-><init>(Landroid/content/Context;Lio/flutter/embedding/android/FlutterTextureView;)V
+Lio/flutter/embedding/engine/FlutterEngine;
+HSPLio/flutter/embedding/engine/FlutterEngine;-><init>(Landroid/content/Context;)V
+HSPLio/flutter/embedding/engine/FlutterEngine;->attachToJni()V
+HSPLio/flutter/embedding/engine/renderer/FlutterRenderer;-><init>(Lio/flutter/embedding/engine/FlutterJNI;)V
+Lio/flutter/embedding/engine/loader/FlutterLoader;
+HSPLio/flutter/embedding/engine/loader/FlutterLoader;-><init>()V
+HSPLio/flutter/embedding/engine/loader/FlutterLoader;->startInitialization(Landroid/content/Context;)V
+HSPLio/flutter/embedding/engine/loader/FlutterLoader;->ensureInitializationComplete(Landroid/content/Context;[Ljava/lang/String;)V
+HSPLio/flutter/embedding/engine/loader/FlutterLoader;->ensureInitializationCompleteAsync(Landroid/content/Context;[Ljava/lang/String;Landroid/os/Handler;Ljava/lang/Runnable;)V
+Lio/flutter/plugins/GeneratedPluginRegistrant;
+HSPLio/flutter/plugins/GeneratedPluginRegistrant;->registerWith(Lio/flutter/embedding/engine/FlutterEngine;)V
+HSPLcom/google/firebase/provider/FirebaseInitProvider;-><init>()V
+HSPLcom/google/firebase/provider/FirebaseInitProvider;->onCreate()Z
+HSPLcom/google/firebase/FirebaseApp;->initializeApp(Landroid/content/Context;)Lcom/google/firebase/FirebaseApp;

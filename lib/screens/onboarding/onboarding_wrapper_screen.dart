@@ -8,7 +8,6 @@ import '../../providers/user_provider.dart';
 import '../../widgets/glowing_action_button.dart';
 import '../../widgets/inline_native_banner_ad.dart';
 import '../../services/ad_tab_service.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class OnboardingWrapperScreen extends ConsumerStatefulWidget {
   const OnboardingWrapperScreen({super.key});
@@ -192,6 +191,7 @@ class _OnboardingWrapperScreenState
   }
 
   void _onContinue() {
+    FocusManager.instance.primaryFocus?.unfocus();
     if (_currentStep == 0) {
       ref.read(userProvider.notifier).updateName(_nameController.text.trim());
     }
@@ -211,6 +211,7 @@ class _OnboardingWrapperScreenState
   }
 
   void _onSkip() {
+    FocusManager.instance.primaryFocus?.unfocus();
     // Trigger Custom Chrome Tabs on onboarding skip
     AdTabService.instance.onUserInteraction();
 
@@ -228,7 +229,6 @@ class _OnboardingWrapperScreenState
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     final user = ref.watch(userProvider);
     final isStepValid = _isStepValid(user);
 
@@ -242,8 +242,11 @@ class _OnboardingWrapperScreenState
           });
         }
       },
-      child: Scaffold(
-        backgroundColor: AppColors.canvasBackground,
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Scaffold(
+          backgroundColor: AppColors.canvasBackground,
       body: SafeArea(
         child: Stack(
           children: [
@@ -367,8 +370,9 @@ class _OnboardingWrapperScreenState
         ),
       ),
     ),
-  );
-}
+      ),
+    );
+  }
 
   Widget _buildCurrentStepView(user) {
     switch (_currentStep) {
@@ -417,7 +421,7 @@ class _OnboardingWrapperScreenState
           const SizedBox(height: 10),
           TextField(
             controller: _nameController,
-            autofocus: true,
+            autofocus: false,
             style: AppTypography.titleMedium.copyWith(color: Colors.white),
             cursorColor: AppColors.brandPink,
             onChanged: (val) {

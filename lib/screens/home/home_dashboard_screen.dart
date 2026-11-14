@@ -10,14 +10,12 @@ import '../../providers/project_provider.dart';
 import '../../providers/template_provider.dart';
 import '../studio/widgets/new_project_modal.dart';
 import '../../widgets/inline_native_banner_ad.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class HomeDashboardScreen extends ConsumerWidget {
   const HomeDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ResponsiveOrientationHelper.enforce(context);
     final user = ref.watch(userProvider);
     final projects = ref.watch(projectProvider);
     final templates = ref.watch(filteredTemplatesProvider);

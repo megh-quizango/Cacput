@@ -6,7 +6,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/routing/route_names.dart';
 import '../../providers/template_provider.dart';
 import '../../widgets/rounded_pill.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class ExploreFeedScreen extends ConsumerStatefulWidget {
   const ExploreFeedScreen({super.key});
@@ -34,7 +33,6 @@ class _ExploreFeedScreenState extends ConsumerState<ExploreFeedScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     final selectedCategory = ref.watch(selectedCategoryProvider);
     final templates = ref.watch(filteredTemplatesProvider);
 

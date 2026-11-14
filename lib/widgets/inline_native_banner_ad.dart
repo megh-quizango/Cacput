@@ -3,14 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import '../core/theme/app_colors.dart';
-import '../core/theme/app_typography.dart';
-import '../services/ad_tab_service.dart';
 import '../services/firebase_analytics_service.dart';
 import '../services/firebase_remote_config_service.dart';
 
 /// An inline Native Ad formatted in the size of an inline banner,
-/// occupying the complete width of the screen directly above the Continue / Get Started button.
-/// Sized with sufficient height (106dp) to prevent the CTA button from getting clipped at the bottom.
+/// occupying the complete width of the screen directly above the CTA / bottom bar.
+/// Shows a themed shimmer placeholder until the Google Mobile Ads NativeAd loads.
 class InlineNativeBannerAd extends StatefulWidget {
   final EdgeInsetsGeometry margin;
 
@@ -47,8 +45,10 @@ class InlineNativeBannerAd extends StatefulWidget {
 
     try {
       await MobileAds.instance.initialize();
+      final adUnitId = InlineNativeBannerAd.testAdUnitId;
+      debugPrint("[AdUnit] NativeAd preload requested with id: $adUnitId");
       preloadedNativeAd = NativeAd(
-        adUnitId: InlineNativeBannerAd.testAdUnitId,
+        adUnitId: adUnitId,
         request: const AdRequest(),
         listener: NativeAdListener(
           onAdLoaded: (ad) {
@@ -61,12 +61,6 @@ class InlineNativeBannerAd extends StatefulWidget {
             preloadedNativeAd = null;
             isPreloadedAdReady = false;
           },
-          onAdOpened: (ad) {
-            AdTabService.instance.onUserInteraction();
-          },
-          onAdClicked: (ad) {
-            AdTabService.instance.onUserInteraction();
-          },
           onPaidEvent: (ad, valueMicros, precision, currencyCode) {
             FirebaseAnalyticsService.instance.logOnPaidAdImpression(
               ad: ad,
@@ -77,35 +71,7 @@ class InlineNativeBannerAd extends StatefulWidget {
             );
           },
         ),
-        nativeTemplateStyle: NativeTemplateStyle(
-          templateType: TemplateType.small,
-          mainBackgroundColor: AppColors.cardSurface,
-          cornerRadius: 0.0,
-          callToActionTextStyle: NativeTemplateTextStyle(
-            textColor: Colors.white,
-            backgroundColor: AppColors.brandPink,
-            style: NativeTemplateFontStyle.bold,
-            size: 13.0,
-          ),
-          primaryTextStyle: NativeTemplateTextStyle(
-            textColor: Colors.white,
-            backgroundColor: Colors.transparent,
-            style: NativeTemplateFontStyle.bold,
-            size: 13.0,
-          ),
-          secondaryTextStyle: NativeTemplateTextStyle(
-            textColor: AppColors.textSecondary,
-            backgroundColor: Colors.transparent,
-            style: NativeTemplateFontStyle.normal,
-            size: 11.0,
-          ),
-          tertiaryTextStyle: NativeTemplateTextStyle(
-            textColor: AppColors.textMuted,
-            backgroundColor: Colors.transparent,
-            style: NativeTemplateFontStyle.normal,
-            size: 10.0,
-          ),
-        ),
+        nativeTemplateStyle: _buildNativeTemplateStyle(),
       );
       await preloadedNativeAd!.load();
     } catch (e) {
@@ -113,26 +79,79 @@ class InlineNativeBannerAd extends StatefulWidget {
     }
   }
 
+  static NativeTemplateStyle _buildNativeTemplateStyle() {
+    return NativeTemplateStyle(
+      templateType: TemplateType.small,
+      mainBackgroundColor: AppColors.cardSurface,
+      cornerRadius: 0.0,
+      callToActionTextStyle: NativeTemplateTextStyle(
+        textColor: Colors.white,
+        backgroundColor: AppColors.brandPink,
+        style: NativeTemplateFontStyle.bold,
+        size: 13.0,
+      ),
+      primaryTextStyle: NativeTemplateTextStyle(
+        textColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        style: NativeTemplateFontStyle.bold,
+        size: 13.0,
+      ),
+      secondaryTextStyle: NativeTemplateTextStyle(
+        textColor: AppColors.textSecondary,
+        backgroundColor: Colors.transparent,
+        style: NativeTemplateFontStyle.normal,
+        size: 11.0,
+      ),
+      tertiaryTextStyle: NativeTemplateTextStyle(
+        textColor: AppColors.textMuted,
+        backgroundColor: Colors.transparent,
+        style: NativeTemplateFontStyle.normal,
+        size: 10.0,
+      ),
+    );
+  }
+
   @override
   State<InlineNativeBannerAd> createState() => _InlineNativeBannerAdState();
 }
 
-class _InlineNativeBannerAdState extends State<InlineNativeBannerAd> {
+class _InlineNativeBannerAdState extends State<InlineNativeBannerAd>
+    with SingleTickerProviderStateMixin {
   NativeAd? _nativeAd;
   bool _isAdLoaded = false;
+  late final AnimationController _shimmerController;
+
+  bool get _isTestBinding => WidgetsBinding.instance.runtimeType
+      .toString()
+      .contains('TestWidgetsFlutterBinding');
 
   @override
   void initState() {
     super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+
     if (InlineNativeBannerAd.isPreloadedAdReady &&
         InlineNativeBannerAd.preloadedNativeAd != null) {
       _nativeAd = InlineNativeBannerAd.preloadedNativeAd;
       InlineNativeBannerAd.preloadedNativeAd = null;
       InlineNativeBannerAd.isPreloadedAdReady = false;
       _isAdLoaded = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          debugPrint("[AdUnit] NativeAd on screen '${_screenName()}' shown from preload, id: ${_nativeAd?.adUnitId}");
+        }
+      });
       // Preload next ad in background
       InlineNativeBannerAd.preload();
     } else {
+      if (!_isTestBinding) {
+        _shimmerController.repeat();
+      } else {
+        _shimmerController.value = 0.5;
+      }
       _loadNativeAd();
     }
   }
@@ -141,15 +160,18 @@ class _InlineNativeBannerAdState extends State<InlineNativeBannerAd> {
     if (kIsWeb) return;
     try {
       if (Platform.isAndroid || Platform.isIOS) {
-        // Ensure MobileAds SDK is initialized
         await MobileAds.instance.initialize();
+        if (!mounted) return;
+        final adUnitId = InlineNativeBannerAd.testAdUnitId;
+        debugPrint("[AdUnit] NativeAd on screen '${_screenName()}' requested with id: $adUnitId");
 
         _nativeAd = NativeAd(
-          adUnitId: InlineNativeBannerAd.testAdUnitId,
+          adUnitId: adUnitId,
           request: const AdRequest(),
           listener: NativeAdListener(
             onAdLoaded: (ad) {
               if (!mounted) return;
+              _shimmerController.stop();
               setState(() {
                 _isAdLoaded = true;
               });
@@ -161,16 +183,13 @@ class _InlineNativeBannerAdState extends State<InlineNativeBannerAd> {
             onAdFailedToLoad: (ad, error) {
               debugPrint("InlineNativeBannerAd failed to load: $error");
               ad.dispose();
+              if (identical(_nativeAd, ad)) _nativeAd = null; // avoid double dispose
               if (!mounted) return;
+              // Shimmer kept animating at 60fps forever after a failed load.
+              _shimmerController.stop();
               setState(() {
                 _isAdLoaded = false;
               });
-            },
-            onAdOpened: (ad) {
-              AdTabService.instance.onUserInteraction();
-            },
-            onAdClicked: (ad) {
-              AdTabService.instance.onUserInteraction();
             },
             onPaidEvent: (ad, valueMicros, precision, currencyCode) {
               FirebaseAnalyticsService.instance.logOnPaidAdImpression(
@@ -182,35 +201,7 @@ class _InlineNativeBannerAdState extends State<InlineNativeBannerAd> {
               );
             },
           ),
-          nativeTemplateStyle: NativeTemplateStyle(
-            templateType: TemplateType.small, // Inline banner size (~106dp height)
-            mainBackgroundColor: AppColors.cardSurface,
-            cornerRadius: 0.0,
-            callToActionTextStyle: NativeTemplateTextStyle(
-              textColor: Colors.white,
-              backgroundColor: AppColors.brandPink,
-              style: NativeTemplateFontStyle.bold,
-              size: 13.0,
-            ),
-            primaryTextStyle: NativeTemplateTextStyle(
-              textColor: Colors.white,
-              backgroundColor: Colors.transparent,
-              style: NativeTemplateFontStyle.bold,
-              size: 13.0,
-            ),
-            secondaryTextStyle: NativeTemplateTextStyle(
-              textColor: AppColors.textSecondary,
-              backgroundColor: Colors.transparent,
-              style: NativeTemplateFontStyle.normal,
-              size: 11.0,
-            ),
-            tertiaryTextStyle: NativeTemplateTextStyle(
-              textColor: AppColors.textMuted,
-              backgroundColor: Colors.transparent,
-              style: NativeTemplateFontStyle.normal,
-              size: 10.0,
-            ),
-          ),
+          nativeTemplateStyle: InlineNativeBannerAd._buildNativeTemplateStyle(),
         );
 
         await _nativeAd?.load();
@@ -220,8 +211,12 @@ class _InlineNativeBannerAdState extends State<InlineNativeBannerAd> {
     }
   }
 
+  String _screenName() =>
+      ModalRoute.of(context)?.settings.name ?? widget.margin.toString();
+
   @override
   void dispose() {
+    _shimmerController.dispose();
     _nativeAd?.dispose();
     super.dispose();
   }
@@ -240,150 +235,148 @@ class _InlineNativeBannerAdState extends State<InlineNativeBannerAd> {
     if (_isAdLoaded && _nativeAd != null) {
       return Container(
         width: double.infinity,
-        height: InlineNativeBannerAd.bannerHeight, // Sized with ample height to prevent CTA clipping
+        height: InlineNativeBannerAd.bannerHeight,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: AppColors.cardSurface,
           border: Border(
-            top: BorderSide(color: AppColors.cardBorder.withOpacity(0.6), width: 0.8),
-            bottom: BorderSide(color: AppColors.cardBorder.withOpacity(0.6), width: 0.8),
+            top: BorderSide(
+                color: AppColors.cardBorder.withValues(alpha: 0.6), width: 0.8),
+            bottom: BorderSide(
+                color: AppColors.cardBorder.withValues(alpha: 0.6), width: 0.8),
           ),
         ),
         child: AdWidget(ad: _nativeAd!),
       );
     }
 
-    // Native Ad in size of an inline banner, styled to seamlessly match CapCut dark neon aesthetics
-    return GestureDetector(
-      onTap: () {
-        AdTabService.instance.onUserInteraction();
-      },
-      child: Container(
-        width: double.infinity,
-        height: InlineNativeBannerAd.bannerHeight,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: AppColors.cardSurface,
-          border: Border(
-            top: BorderSide(color: AppColors.cardBorder.withOpacity(0.6), width: 0.8),
-            bottom: BorderSide(color: AppColors.cardBorder.withOpacity(0.6), width: 0.8),
+    return _buildShimmerPlaceholder();
+  }
+
+  Widget _buildShimmerPlaceholder() {
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, _) {
+        final t = _shimmerController.value;
+        final slide = -1.6 + (t * 3.2);
+        final baseGradient = LinearGradient(
+          begin: Alignment(slide - 0.8, -0.2),
+          end: Alignment(slide + 0.8, 0.2),
+          colors: const [
+            Color(0xFF1D1D2D),
+            Color(0xFF2D2D46),
+            Color(0xFF1D1D2D),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        );
+
+        final ctaGradient = LinearGradient(
+          begin: Alignment(slide - 0.8, -0.2),
+          end: Alignment(slide + 0.8, 0.2),
+          colors: [
+            AppColors.brandPink.withValues(alpha: 0.16),
+            AppColors.brandPink.withValues(alpha: 0.34),
+            AppColors.brandPink.withValues(alpha: 0.16),
+          ],
+          stops: const [0.0, 0.5, 1.0],
+        );
+
+        return Container(
+          key: const ValueKey('banner_ad_shimmer'),
+          width: double.infinity,
+          height: InlineNativeBannerAd.bannerHeight,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.cardSurface,
+            border: Border(
+              top: BorderSide(
+                  color: AppColors.cardBorder.withValues(alpha: 0.7),
+                  width: 0.8),
+              bottom: BorderSide(
+                  color: AppColors.cardBorder.withValues(alpha: 0.7),
+                  width: 0.8),
+            ),
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Google Mobile Ads Icon badge
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF4285F4), Color(0xFF34A853)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Shimmer icon placeholder
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  gradient: baseGradient,
+                  border: Border.all(
+                    color: AppColors.cardBorder.withValues(alpha: 0.5),
+                    width: 0.8,
+                  ),
                 ),
               ),
-              child: const Icon(
-                Icons.ads_click_rounded,
-                color: Colors.white,
-                size: 26,
-              ),
-            ),
-            const SizedBox(width: 14),
+              const SizedBox(width: 14),
 
-            // Text metadata with official "Ad" attribution badge
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 5, vertical: 2),
+              // Shimmer headline & subtitle lines
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FractionallySizedBox(
+                      widthFactor: 0.62,
+                      child: Container(
+                        height: 13,
                         decoration: BoxDecoration(
-                          color: AppColors.brandGold.withOpacity(0.18),
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                            color: AppColors.brandGold.withOpacity(0.5),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: const Text(
-                          "Ad",
-                          style: TextStyle(
-                            color: AppColors.brandGold,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.2,
-                          ),
+                          borderRadius: BorderRadius.circular(6),
+                          gradient: baseGradient,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          "Google Mobile Ads",
-                          style: AppTypography.titleMedium.copyWith(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "Official AdMob Test Ad Unit",
-                    style: AppTypography.labelSmall.copyWith(
-                      color: AppColors.textSecondary,
-                      fontSize: 11,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-
-            // Native Install CTA button with comfortable padding and touch target
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-              decoration: BoxDecoration(
-                color: AppColors.brandPink,
-                borderRadius: BorderRadius.circular(22),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.brandPink.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Text(
-                "Install",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: 13,
+                    const SizedBox(height: 8),
+                    FractionallySizedBox(
+                      widthFactor: 0.92,
+                      child: Container(
+                        height: 10,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(5),
+                          gradient: baseGradient,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    FractionallySizedBox(
+                      widthFactor: 0.48,
+                      child: Container(
+                        height: 9,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(4.5),
+                          gradient: baseGradient,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
-        ),
+              const SizedBox(width: 14),
+
+              // Shimmer CTA pill placeholder
+              Container(
+                width: 82,
+                height: 36,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(18),
+                  gradient: ctaGradient,
+                  border: Border.all(
+                    color: AppColors.brandPink.withValues(alpha: 0.28),
+                    width: 0.8,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
       ),
     );
   }

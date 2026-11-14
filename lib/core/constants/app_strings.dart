@@ -1,5 +1,5 @@
 class AppStrings {
-  static const String appName = "PhotoVideoCourse";
+  static const String appName = "Photo Video Course Guide";
   static const String appTagline = "Create. Edit. Inspire.";
   static const String skip = "Skip";
   static const String continueText = "Continue";

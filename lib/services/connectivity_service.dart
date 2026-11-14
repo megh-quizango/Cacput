@@ -15,6 +15,8 @@ class ConnectivityService {
   StreamSubscription<List<ConnectivityResult>>? _subscription;
   Timer? _periodicCheckTimer;
 
+  bool _isInitialized = false;
+  Future<bool>? _inFlightCheck;
   bool _isOnline = true;
   bool _isDialogShowing = false;
   bool _isSimulatedOffline = false;
@@ -26,6 +28,9 @@ class ConnectivityService {
   final ValueNotifier<bool> connectionNotifier = ValueNotifier<bool>(true);
 
   void initialize() {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
     // Initial check
     checkRealConnection();
 
@@ -34,8 +39,8 @@ class ConnectivityService {
       _evaluateConnectivity(results);
     });
 
-    // Periodic heartbeat to catch silent drops (e.g. router disconnected, captive portal)
-    _periodicCheckTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+    // Periodic heartbeat to catch silent drops without excessive DNS churn
+    _periodicCheckTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!_isSimulatedOffline) {
         checkRealConnection();
       }
@@ -43,8 +48,11 @@ class ConnectivityService {
   }
 
   void dispose() {
+    _isInitialized = false;
     _subscription?.cancel();
+    _subscription = null;
     _periodicCheckTimer?.cancel();
+    _periodicCheckTimer = null;
     connectionNotifier.dispose();
   }
 
@@ -71,6 +79,20 @@ class ConnectivityService {
       return true;
     }
 
+    if (_inFlightCheck != null) return _inFlightCheck!;
+
+    final check = _performConnectivityCheck();
+    _inFlightCheck = check;
+    try {
+      return await check;
+    } finally {
+      if (identical(_inFlightCheck, check)) {
+        _inFlightCheck = null;
+      }
+    }
+  }
+
+  Future<bool> _performConnectivityCheck() async {
     try {
       final results = await _connectivity.checkConnectivity();
       if (results.isEmpty || results.every((r) => r == ConnectivityResult.none)) {
@@ -79,7 +101,7 @@ class ConnectivityService {
       }
 
       final lookup = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(milliseconds: 2500));
+          .timeout(const Duration(milliseconds: 2000));
       if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
         _updateConnectionStatus(true);
         return true;
@@ -152,10 +174,9 @@ class ConnectivityService {
 
     final context = rootNavigatorKey.currentContext;
     if (context != null) {
-      Navigator.of(context, rootNavigator: true).popUntil((route) {
-        // Pop if dialog is on top
-        return route is! DialogRoute || route.settings.name != null;
-      });
+      // Old predicate stopped at the dialog itself (its name is non-null), so it never closed.
+      Navigator.of(context, rootNavigator: true)
+          .popUntil((route) => route.settings.name != 'no_internet_dialog');
     }
     _isDialogShowing = false;
   }

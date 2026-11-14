@@ -28,7 +28,7 @@ void main() {
       );
 
       // Verify splash screen branding is immediately visible
-      expect(find.text('PhotoVideoCourse'), findsOneWidget);
+      expect(find.text('Photo Video Course Guide'), findsOneWidget);
       expect(find.text('Create. Edit. Inspire.'), findsOneWidget);
 
       // Pump to trigger addPostFrameCallback
@@ -38,7 +38,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 3000));
 
       // Assert that we are STILL on splash screen (did not advance to onboarding)
-      expect(find.text('PhotoVideoCourse'), findsOneWidget);
+      expect(find.text('Photo Video Course Guide'), findsOneWidget);
       expect(find.text('Create. Edit. Inspire.'), findsOneWidget);
 
       // Restore online status and pump through the pending timer
@@ -73,7 +73,7 @@ void main() {
 
       // Verify that AppExitDialog is shown
       expect(find.byType(AppExitDialog), findsOneWidget);
-      expect(find.text('Exit PhotoVideoCourse?'), findsOneWidget);
+      expect(find.text('Exit Photo Video Course Guide?'), findsOneWidget);
     });
 
     testWidgets('Pressing back on non-Home tab switches back to Home tab',

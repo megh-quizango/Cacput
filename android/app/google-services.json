@@ -7,6 +7,25 @@
   "client": [
     {
       "client_info": {
+        "mobilesdk_app_id": "1:905456780320:android:21175abffa6623396ea845",
+        "android_client_info": {
+          "package_name": "com.creativemedia.capcut"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDUVHt0niQDRpkck_AmSSnzniD8CfKOrE8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
         "mobilesdk_app_id": "1:905456780320:android:f2f50f040a00b1586ea845",
         "android_client_info": {
           "package_name": "com.rvariety.capcut"

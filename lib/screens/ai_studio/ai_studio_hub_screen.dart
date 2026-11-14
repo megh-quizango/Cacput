@@ -5,14 +5,12 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/routing/route_names.dart';
 import '../../providers/ai_studio_provider.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class AiStudioHubScreen extends ConsumerWidget {
   const AiStudioHubScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ResponsiveOrientationHelper.enforce(context);
     return Scaffold(
       backgroundColor: AppColors.canvasBackground,
       body: SafeArea(

@@ -136,6 +136,8 @@ class _ResponsiveOrientationManagerState
 
 /// Route observer to re-enforce orientation rules each time a screen route is loaded
 class OrientationLockRouteObserver extends NavigatorObserver {
+  bool? _lastIsMobile;
+
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
@@ -149,6 +151,12 @@ class OrientationLockRouteObserver extends NavigatorObserver {
   }
 
   void _check() {
+    final view = WidgetsBinding.instance.platformDispatcher.views.firstOrNull;
+    if (view == null || view.devicePixelRatio <= 0) return;
+    final shortestSide = view.physicalSize.shortestSide / view.devicePixelRatio;
+    final isMobile = shortestSide < ResponsiveOrientationHelper.mobileBreakpoint;
+    if (_lastIsMobile == isMobile) return;
+    _lastIsMobile = isMobile;
     ResponsiveOrientationHelper.enforceFromPlatformDispatcher();
   }
 }

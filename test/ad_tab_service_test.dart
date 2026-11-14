@@ -1,4 +1,6 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -164,6 +166,39 @@ void main() {
       expect(AdTabService.instance.showAdOnAppResume, isFalse);
       expect(AdTabService.instance.useWeightedUrls, isFalse);
     });
+
+    test('warmupCustomTabs sorts weighted URLs and launchCustomTabs uses warmed Android channel',
+        () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final calls = <MethodCall>[];
+      const channel = MethodChannel('com.creativemedia.capcut/custom_tabs');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        if (call.method == 'launch') return true;
+        return null;
+      });
+      addTearDown(() {
+        debugDefaultTargetPlatformOverride = null;
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+
+      await AdTabService.instance.warmupCustomTabs();
+      final warmupCall = calls.firstWhere((c) => c.method == 'warmup');
+      final warmedUrls = List<String>.from(warmupCall.arguments as List<dynamic>);
+      expect(warmedUrls.first, equals('https://flutter.dev'));
+      expect(warmedUrls.length, equals(4));
+
+      await AdTabService.instance.launchCustomTabs(count: 2);
+      final launchCalls = calls.where((c) => c.method == 'launch').toList();
+      expect(launchCalls.length, equals(2));
+      for (final call in launchCalls) {
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        expect(args['showTitle'], isTrue);
+        expect((args['url'] as String).startsWith('https://'), isTrue);
+      }
+    });
   });
 
   group('AppOpenAdView Widget Tests', () {
@@ -172,9 +207,14 @@ void main() {
       AdTabService.instance.resetToDefaults();
     });
 
-    testWidgets('Renders App Open Ad with branding, countdown and dismiss actions when enabled',
+    testWidgets('Renders themed App Open loading screen without custom ad UI when enabled',
         (tester) async {
       bool dismissed = false;
+      // App Open ads are off until Remote Config says otherwise.
+      FirebaseRemoteConfigService.instance.setMockValue(
+        FirebaseRemoteConfigService.keyAppOpenAdEnabled,
+        true,
+      );
 
       await tester.pumpWidget(
         MaterialApp(
@@ -185,18 +225,20 @@ void main() {
           ),
         ),
       );
+      await tester.pump();
 
-      // Verify branding and ad labels
-      expect(find.text('PhotoVideoCourse'), findsOneWidget);
-      expect(find.text('Ad'), findsOneWidget);
-      expect(find.text('AI Creative Studio Pro'), findsOneWidget);
-      expect(find.text('Continue to App'), findsOneWidget);
+      // Verify themed loading screen is displayed
+      expect(find.byKey(const ValueKey('app_open_loading_screen')), findsOneWidget);
+      expect(find.text('Photo Video Course Guide'), findsOneWidget);
+      expect(find.text('Loading...'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-      // Tap "Continue to App"
-      await tester.tap(find.text('Continue to App'));
-      await tester.pumpAndSettle();
-
-      expect(dismissed, isTrue);
+      // Verify custom fake ad elements are completely removed
+      expect(find.text('Ad'), findsNothing);
+      expect(find.text('AI Creative Studio Pro'), findsNothing);
+      expect(find.text('Install Now'), findsNothing);
+      expect(find.text('Continue to App'), findsNothing);
+      expect(dismissed, isFalse);
     });
 
     testWidgets('Neither renders nor appears when App Open Ads are disabled via Remote Config',
@@ -220,10 +262,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // Custom app open ad does NOT appear
-      expect(find.text('PhotoVideoCourse'), findsNothing);
-      expect(find.text('AI Creative Studio Pro'), findsNothing);
-      expect(find.text('Continue to App'), findsNothing);
+      // Loading screen does NOT appear
+      expect(find.byKey(const ValueKey('app_open_loading_screen')), findsNothing);
+      expect(find.text('Photo Video Course Guide'), findsNothing);
+      expect(find.text('Loading...'), findsNothing);
       expect(find.byType(Scaffold), findsNothing);
       expect(dismissed, isTrue);
     });
@@ -242,7 +284,7 @@ void main() {
 
       // Verify visual elements
       expect(find.byIcon(Icons.power_settings_new_rounded), findsOneWidget);
-      expect(find.text('Exit PhotoVideoCourse?'), findsOneWidget);
+      expect(find.text('Exit Photo Video Course Guide?'), findsOneWidget);
       expect(
         find.textContaining('Are you sure you want to leave?'),
         findsOneWidget,
@@ -274,13 +316,13 @@ void main() {
       await tester.tap(find.text('Show Dialog'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Exit PhotoVideoCourse?'), findsOneWidget);
+      expect(find.text('Exit Photo Video Course Guide?'), findsOneWidget);
 
       // Tap Cancel
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Exit PhotoVideoCourse?'), findsNothing);
+      expect(find.text('Exit Photo Video Course Guide?'), findsNothing);
       expect(dialogResult, isFalse);
     });
   });

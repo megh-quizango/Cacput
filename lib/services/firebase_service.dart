@@ -32,9 +32,11 @@ class FirebaseService {
       // Setup Crashlytics error handling
       _setupCrashlytics();
 
-      // Initialize Remote Config & Analytics services
-      await FirebaseRemoteConfigService.instance.initialize();
-      await FirebaseAnalyticsService.instance.initialize();
+      // Initialize Remote Config & Analytics services concurrently
+      await Future.wait([
+        FirebaseRemoteConfigService.instance.initialize(),
+        FirebaseAnalyticsService.instance.initialize(),
+      ]);
     } catch (e) {
       debugPrint("FirebaseService initialization notice (e.g. mock test env): $e");
       // Still ensure Remote Config and Analytics defaults are initialized in mock/test envs

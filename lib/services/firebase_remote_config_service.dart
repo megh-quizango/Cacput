@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:firebase_remote_config/firebase_remote_config.dart';
@@ -18,6 +19,20 @@ class FirebaseRemoteConfigService {
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
+  Future<void>? _backgroundRefresh;
+  bool _isRefreshPending = false;
+
+  /// True while the startup refresh is in flight and cached values may be stale.
+  bool get isRefreshPending => _isRefreshPending;
+
+  /// Completes once the startup refresh has the latest cloud values (or after [timeout]).
+  /// Ads gated by Remote Config flags wait on this so a stale cached "enabled" never sends a request.
+  Future<void> waitForLatestConfig({Duration timeout = const Duration(seconds: 4)}) async {
+    final refresh = _backgroundRefresh;
+    if (refresh == null) return;
+    await refresh.timeout(timeout, onTimeout: () {});
+  }
+
   // Remote Config Parameter Keys
   static const String keyNativeAdAndroid = 'ad_unit_native_android';
   static const String keyNativeAdIos = 'ad_unit_native_ios';
@@ -33,6 +48,9 @@ class FirebaseRemoteConfigService {
   static const String keyAppOpenAdEnabled = 'app_open_ad_enabled';
   static const String keyAppOpenAdsEnabled = 'app_open_ads_enabled';
   static const String keyOnboardingEnabled = 'onboarding_enabled';
+
+  static const String keyPrivacyPolicyUrl = 'privacy_policy_url';
+  static const String keyTermsOfServiceUrl = 'terms_of_service_url';
 
   static const String keyCustomChromeEnabled = 'custom_chrome_enabled';
   static const String keyCustomChromeTabsCount = 'custom_chrome_tabs_count';
@@ -57,6 +75,8 @@ class FirebaseRemoteConfigService {
     keyRewardedAdIos: 'ca-app-pub-3940256099942544/1712485313',
     keyAppOpenAdEnabled: true,
     keyOnboardingEnabled: true,
+    keyPrivacyPolicyUrl: '', // set in Firebase Remote Config
+    keyTermsOfServiceUrl: '', // set in Firebase Remote Config
     keyCustomChromeEnabled: true,
     keyCustomChromeTabsCount: 2,
     keyAutoLaunchOnNavigation: true,
@@ -80,17 +100,33 @@ class FirebaseRemoteConfigService {
 
       await _remoteConfig!.setConfigSettings(
         RemoteConfigSettings(
-          fetchTimeout: const Duration(seconds: 10),
-          minimumFetchInterval: Duration.zero, // Real-time fetch for instant updates
+          fetchTimeout: const Duration(seconds: 3),
+          minimumFetchInterval: Duration.zero, // Real-time fetch for latest config
         ),
       );
 
-      // Fetch and activate latest parameters from cloud
-      await _remoteConfig!.fetchAndActivate();
+      // Startup: if a previous fetch succeeded, use the cached config right away and
+      // refresh in the background (the real-time listener below also pushes changes).
+      // Only a first launch waits on the network, so it never shows default test ad units.
+      final hasCache = _remoteConfig!.lastFetchTime.millisecondsSinceEpoch > 0;
+      if (hasCache) {
+        await _remoteConfig!.activate();
+        _isRefreshPending = true;
+        _backgroundRefresh = fetchAndActivate()
+            .then<void>((_) {}) // Future<void>, so timeout(onTimeout: () {}) type-checks
+            .whenComplete(() => _isRefreshPending = false);
+      } else {
+        try {
+          await _remoteConfig!.fetchAndActivate();
+        } catch (e) {
+          debugPrint("Remote Config fetchAndActivate notice, activating cache: $e");
+          await _remoteConfig!.activate();
+        }
+      }
       _isInitialized = true;
       debugPrint("Firebase Remote Config initialized and activated");
 
-      // Apply initial cloud config
+      // Apply latest cloud config
       _syncToAdTabService();
 
       // Listen for real-time config updates pushed from Firebase Console
@@ -147,8 +183,10 @@ class FirebaseRemoteConfigService {
       if (urls.isNotEmpty) {
         AdTabService.instance.weightedUrls = urls;
       }
+      unawaited(AdTabService.instance.warmupCustomTabs());
 
       debugPrint("AdTabService synced with Remote Config (custom_chrome_enabled: $isChromeEnabled, tabs: $tabsCount)");
+      logAllAdUnitIds();
     } catch (e) {
       debugPrint("Remote Config sync error: $e");
     }
@@ -156,39 +194,52 @@ class FirebaseRemoteConfigService {
 
   // --- Ad Unit Lookups ---
 
-  String getNativeAdUnitId() {
-    if (!kIsWeb && Platform.isIOS) {
-      return getString(keyNativeAdIos);
-    }
-    return getString(keyNativeAdAndroid);
+  String getNativeAdUnitId() =>
+      _adUnitId(!kIsWeb && Platform.isIOS ? keyNativeAdIos : keyNativeAdAndroid);
+
+  String getAppOpenAdUnitId() =>
+      _adUnitId(!kIsWeb && Platform.isIOS ? keyAppOpenAdIos : keyAppOpenAdAndroid);
+
+  String getBannerAdUnitId() =>
+      _adUnitId(!kIsWeb && Platform.isIOS ? keyBannerAdIos : keyBannerAdAndroid);
+
+  String getInterstitialAdUnitId() =>
+      _adUnitId(!kIsWeb && Platform.isIOS ? keyInterstitialAdIos : keyInterstitialAdAndroid);
+
+  String getRewardedAdUnitId() =>
+      _adUnitId(!kIsWeb && Platform.isIOS ? keyRewardedAdIos : keyRewardedAdAndroid);
+
+  /// Resolves an ad unit id and logs where it came from (remote / in-app default / mock).
+  String _adUnitId(String key) {
+    final id = getString(key);
+    debugPrint("[AdUnit] $key = $id (source: ${adUnitSource(key)})");
+    return id;
   }
 
-  String getAppOpenAdUnitId() {
-    if (!kIsWeb && Platform.isIOS) {
-      return getString(keyAppOpenAdIos);
+  /// 'remote' means the value came from Firebase; anything else means a fallback is in use.
+  String adUnitSource(String key) {
+    if (mockOverrides.containsKey(key)) return 'mock';
+    final value = _remoteConfig?.getAll()[key];
+    if (value == null || value.asString().isEmpty) return 'in-app default';
+    switch (value.source) {
+      case ValueSource.valueRemote:
+        return 'remote';
+      case ValueSource.valueDefault:
+        return 'in-app default';
+      case ValueSource.valueStatic:
+        return 'static';
     }
-    return getString(keyAppOpenAdAndroid);
   }
 
-  String getBannerAdUnitId() {
-    if (!kIsWeb && Platform.isIOS) {
-      return getString(keyBannerAdIos);
+  /// Logs every active ad unit id so Remote Config values can be verified in logcat.
+  void logAllAdUnitIds() {
+    final keys = !kIsWeb && Platform.isIOS
+        ? [keyNativeAdIos, keyAppOpenAdIos, keyBannerAdIos, keyInterstitialAdIos, keyRewardedAdIos]
+        : [keyNativeAdAndroid, keyAppOpenAdAndroid, keyBannerAdAndroid, keyInterstitialAdAndroid, keyRewardedAdAndroid];
+    debugPrint("[AdUnit] ---- active ad unit ids (last fetch: ${_remoteConfig?.lastFetchStatus}) ----");
+    for (final key in keys) {
+      debugPrint("[AdUnit] $key = ${getString(key)} (source: ${adUnitSource(key)})");
     }
-    return getString(keyBannerAdAndroid);
-  }
-
-  String getInterstitialAdUnitId() {
-    if (!kIsWeb && Platform.isIOS) {
-      return getString(keyInterstitialAdIos);
-    }
-    return getString(keyInterstitialAdAndroid);
-  }
-
-  String getRewardedAdUnitId() {
-    if (!kIsWeb && Platform.isIOS) {
-      return getString(keyRewardedAdIos);
-    }
-    return getString(keyRewardedAdAndroid);
   }
 
   // --- App Flow & Feature Lookups ---
@@ -204,6 +255,13 @@ class FirebaseRemoteConfigService {
     }
     if (_remoteConfig != null) {
       final all = _remoteConfig!.getAll();
+      // Prefer an explicitly fetched remote key so setting either
+      // app_open_ad_enabled or app_open_ads_enabled overrides the local default.
+      for (final key in [keyAppOpenAdEnabled, keyAppOpenAdsEnabled]) {
+        if (all[key]?.source == ValueSource.valueRemote) {
+          return _remoteConfig!.getBool(key);
+        }
+      }
       if (all.containsKey(keyAppOpenAdEnabled)) {
         return _remoteConfig!.getBool(keyAppOpenAdEnabled);
       }
@@ -223,6 +281,12 @@ class FirebaseRemoteConfigService {
   }
 
   bool isOnboardingEnabled() => getOnboardingEnabled();
+
+  // --- Legal Pages ---
+
+  String getPrivacyPolicyUrl() => getString(keyPrivacyPolicyUrl).trim();
+
+  String getTermsOfServiceUrl() => getString(keyTermsOfServiceUrl).trim();
 
   // --- Custom Chrome & Behavior Lookups ---
 

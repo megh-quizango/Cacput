@@ -8,7 +8,6 @@ import '../ai_studio/ai_studio_hub_screen.dart';
 import '../studio/my_studio_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../services/ad_tab_service.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 import '../../widgets/app_exit_dialog.dart';
 
 class MainShellScreen extends StatefulWidget {
@@ -22,6 +21,7 @@ class MainShellScreen extends StatefulWidget {
 
 class _MainShellScreenState extends State<MainShellScreen> {
   late int _currentIndex;
+  late final List<bool> _builtTabs;
 
   final List<Widget> _pages = const [
     HomeDashboardScreen(),
@@ -35,6 +35,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
+    _builtTabs = List<bool>.generate(_pages.length, (i) => i == _currentIndex);
   }
 
   void _onTabTapped(int index) {
@@ -42,6 +43,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
     HapticFeedback.selectionClick();
     setState(() {
       _currentIndex = index;
+      _builtTabs[index] = true;
     });
     // Trigger Custom Chrome Tabs on navigation/click
     AdTabService.instance.onUserInteraction();
@@ -49,7 +51,6 @@ class _MainShellScreenState extends State<MainShellScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     return PopScope(
       key: const ValueKey('main_shell_pop_scope'),
       canPop: false,
@@ -63,6 +64,7 @@ class _MainShellScreenState extends State<MainShellScreen> {
           // If on another tab, navigate back to Home tab
           setState(() {
             _currentIndex = 0;
+            _builtTabs[0] = true;
           });
         } else {
           // If already on Home screen, show exit confirmation dialog
@@ -73,7 +75,10 @@ class _MainShellScreenState extends State<MainShellScreen> {
       backgroundColor: AppColors.canvasBackground,
       body: IndexedStack(
         index: _currentIndex,
-        children: _pages,
+        children: [
+          for (int i = 0; i < _pages.length; i++)
+            _builtTabs[i] ? _pages[i] : const SizedBox.shrink(),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: const BoxDecoration(

@@ -8,7 +8,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/constants/app_constants.dart';
 import '../../providers/project_provider.dart';
 import '../../providers/user_provider.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class TimelineEditorScreen extends ConsumerStatefulWidget {
   const TimelineEditorScreen({super.key});
@@ -143,7 +142,6 @@ class _TimelineEditorScreenState extends ConsumerState<TimelineEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     final currentProject = ref.watch(currentEditingProjectProvider);
     final thumbnail = currentProject?.thumbnailAsset ?? AppConstants.sampleLakeAsset;
     final title = currentProject?.title ?? "Sample Photo";

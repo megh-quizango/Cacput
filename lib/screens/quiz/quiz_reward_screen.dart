@@ -8,7 +8,6 @@ import '../../core/routing/route_names.dart';
 import '../../providers/user_provider.dart';
 import '../../models/quiz_question_model.dart';
 import '../../widgets/glowing_action_button.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class QuizRewardScreen extends ConsumerStatefulWidget {
   const QuizRewardScreen({super.key});
@@ -73,7 +72,6 @@ class _QuizRewardScreenState extends ConsumerState<QuizRewardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     final currentQ = _questions[_currentQuestionIndex];
 
     return Scaffold(

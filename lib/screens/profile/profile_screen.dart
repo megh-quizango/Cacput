@@ -7,14 +7,12 @@ import '../../core/routing/route_names.dart';
 import '../../providers/user_provider.dart';
 import '../../providers/project_provider.dart';
 import '../../models/user_profile.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ResponsiveOrientationHelper.enforce(context);
     final user = ref.watch(userProvider);
     final projects = ref.watch(projectProvider);
 
@@ -503,10 +501,10 @@ class ProfileScreen extends ConsumerWidget {
                       onTap: () {
                         showAboutDialog(
                           context: context,
-                          applicationName: "PhotoVideoCourse",
+                          applicationName: "Photo Video Course Guide",
                           applicationVersion: "Version 1.0.0",
                           applicationLegalese:
-                              "© 2026 RVariety Studio. All rights reserved.",
+                              "© 2026",
                         );
                       },
                     ),

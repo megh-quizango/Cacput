@@ -19,11 +19,13 @@ void main() {
     // Verify Name step header is displayed
     expect(find.text('Your Name'), findsOneWidget);
 
-    // Verify text field is empty (not pre-filled with "megh")
+    // Verify text field is empty and NOT autofocused on initial render
     final textFieldFinder = find.byType(TextField);
     expect(textFieldFinder, findsOneWidget);
     final textField = tester.widget<TextField>(textFieldFinder);
     expect(textField.controller?.text, isEmpty);
+    expect(textField.autofocus, isFalse);
+    expect(textField.focusNode?.hasFocus ?? false, isFalse);
 
     // Type a name
     await tester.enterText(textFieldFinder, 'Alex Creator');

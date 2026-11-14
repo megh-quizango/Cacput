@@ -54,7 +54,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyDUVHt0niQDRpkck_AmSSnzniD8CfKOrE8',
-    appId: '1:905456780320:android:f2f50f040a00b1586ea845',
+    appId: '1:905456780320:android:21175abffa6623396ea845',
     messagingSenderId: '905456780320',
     projectId: 'capcut-eb1c8',
     storageBucket: 'capcut-eb1c8.firebasestorage.app',

@@ -8,7 +8,6 @@ import '../../core/routing/route_names.dart';
 import '../../providers/ai_studio_provider.dart';
 import '../../providers/project_provider.dart';
 import '../../widgets/glowing_action_button.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class AutoCaptionScreen extends ConsumerWidget {
   const AutoCaptionScreen({super.key});
@@ -38,7 +37,6 @@ class AutoCaptionScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ResponsiveOrientationHelper.enforce(context);
     final state = ref.watch(autoCaptionProvider);
     final notifier = ref.read(autoCaptionProvider.notifier);
 

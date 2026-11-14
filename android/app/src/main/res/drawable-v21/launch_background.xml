@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Native copy of Flutter's SplashScreen (bg + logo/title/tagline), shown instantly on tap until
+     Flutter draws its first frame, so users see one continuous splash. Regenerate splash_content.png
+     if the Flutter splash design changes. top inset offsets the status bar so it lines up with SafeArea. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/launch_canvas" />
+    <item android:top="28dp">
+        <bitmap android:gravity="center" android:src="@drawable/splash_content" />
+    </item>
 </layer-list>

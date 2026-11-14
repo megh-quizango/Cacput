@@ -1,10 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/routing/route_names.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 import '../../services/connectivity_service.dart';
 import '../../services/ad_tab_service.dart';
 import '../../services/firebase_service.dart';
@@ -33,7 +34,7 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 750),
     );
 
     _fadeAnimation = CurvedAnimation(
@@ -48,7 +49,8 @@ class _SplashScreenState extends State<SplashScreen>
       ),
     );
 
-    _controller.forward();
+    // Start fully visible: the native launch screen already shows this content, so a fade-in would blink.
+    _controller.value = 1.0;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkInternetAndProceed();
@@ -82,19 +84,29 @@ class _SplashScreenState extends State<SplashScreen>
     if (_isProceeding) return;
     _isProceeding = true;
 
-    // Load SDKs now that we are online
+    // Load cached prefs first so freshly fetched Remote Config overrides them cleanly.
+    await AdTabService.instance.loadPersistedSettings();
+
+    // Mobile Ads SDK init no longer blocks navigation (it could take up to 4s);
+    // only Remote Config is awaited so ads load with the right ad unit ids.
+    unawaited(AdTabService.instance.initialize(loadPrefs: false));
     await FirebaseService.instance.initialize();
-    await AdTabService.instance.initialize();
 
-    // Eagerly preload real Google Mobile Ads (App Open Ad & Native Ad)
-    // so they are ready immediately right after splash
-    AdTabService.instance.preloadAds();
-    InlineNativeBannerAd.preload();
+    // Preload ads once the SDK is ready, off the navigation path.
+    unawaited(MobileAds.instance.initialize().then((_) async {
+      InlineNativeBannerAd.preload();
+      // App Open ad waits for the fresh Remote Config fetch so a stale cached
+      // "app_open_ad_enabled: true" can't send a request after it was disabled.
+      await FirebaseRemoteConfigService.instance.waitForLatestConfig();
+      AdTabService.instance.preloadAds();
+    }).catchError((Object e) {
+      debugPrint("Ad preload after MobileAds init failed: $e");
+    }));
 
-    // Ensure splash presentation has played for at least minimum branding time
+    // Keep splash animation smooth without adding an unnecessary long wait.
     if (_startTime != null) {
       final elapsed = DateTime.now().difference(_startTime!);
-      const minDuration = Duration(milliseconds: 2200);
+      const minDuration = Duration(milliseconds: 900);
       if (elapsed < minDuration) {
         await Future.delayed(minDuration - elapsed);
       }
@@ -123,7 +135,6 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     return Scaffold(
       backgroundColor: AppColors.canvasBackground,
       body: SafeArea(
@@ -208,9 +219,9 @@ class _SplashScreenState extends State<SplashScreen>
                     ),
                     const SizedBox(height: 28),
 
-                    // "PhotoVideoCourse" title
+                    // "Photo Video Course Guide" title
                     Text(
-                      "PhotoVideoCourse",
+                      "Photo Video Course Guide",
                       style: AppTypography.displayLarge.copyWith(
                         fontSize: 32,
                         fontWeight: FontWeight.w800,

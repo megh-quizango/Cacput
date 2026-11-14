@@ -9,7 +9,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('Home Screen Inline Native Ad Tests', () {
-    testWidgets('Home screen includes InlineNativeBannerAd occupying full width directly above bottom nav bar',
+    testWidgets('Home screen includes InlineNativeBannerAd shimmer occupying full width directly above bottom nav bar',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -21,14 +21,16 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // 1. Verify Home tab is active and InlineNativeBannerAd is present on Home screen
+      // 1. Verify Home tab is active and InlineNativeBannerAd + shimmer are present
       final adFinder = find.byType(InlineNativeBannerAd);
       expect(adFinder, findsOneWidget);
+      final shimmerFinder = find.byKey(const ValueKey('banner_ad_shimmer'));
+      expect(shimmerFinder, findsOneWidget);
 
-      // 2. Verify "Ad" attribution badge and "Install" CTA are rendered
-      expect(find.text('Ad'), findsOneWidget);
-      final ctaFinder = find.text('Install');
-      expect(ctaFinder, findsOneWidget);
+      // 2. Verify custom fake ad UI is removed
+      expect(find.text('Google Mobile Ads'), findsNothing);
+      expect(find.text('Official AdMob Test Ad Unit'), findsNothing);
+      expect(find.text('Install'), findsNothing);
 
       // 3. Verify the native ad is placed directly above the app bottom navigation bar
       final navBarFinder = find.byKey(const ValueKey('bottom_nav_safe_area'));
@@ -46,13 +48,7 @@ void main() {
       expect(adRect.left, equals(0.0));
       expect(adRect.right, equals(screenWidth));
 
-      // 5. Verify the CTA button is fully inside the ad and not clipped at bottom
-      final ctaRect = tester.getRect(ctaFinder);
-      expect(ctaRect.top, greaterThanOrEqualTo(adRect.top));
-      expect(ctaRect.bottom, lessThanOrEqualTo(adRect.bottom));
-      expect(adRect.bottom - ctaRect.bottom, greaterThanOrEqualTo(8.0));
-
-      // 6. Verify switching to another tab hides the home screen ad (it goes offstage)
+      // 5. Verify switching to another tab hides the home screen ad (it goes offstage)
       final exploreTabFinder = find.descendant(
         of: navBarFinder,
         matching: find.text('Explore'),
@@ -63,7 +59,7 @@ void main() {
       // When on Explore tab, the ad should be offstage (not visible on screen)
       expect(find.byType(InlineNativeBannerAd, skipOffstage: true), findsNothing);
 
-      // 7. Switching back to Home tab brings the ad back on stage
+      // 6. Switching back to Home tab brings the ad shimmer back on stage
       final homeTabFinder = find.descendant(
         of: navBarFinder,
         matching: find.text('Home'),
@@ -72,10 +68,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(InlineNativeBannerAd, skipOffstage: true), findsOneWidget);
-      expect(find.text('Google Mobile Ads'), findsOneWidget);
+      expect(find.byKey(const ValueKey('banner_ad_shimmer'), skipOffstage: true), findsOneWidget);
     });
 
-    testWidgets('HomeDashboardScreen standalone renders InlineNativeBannerAd in bottomNavigationBar',
+    testWidgets('HomeDashboardScreen standalone renders InlineNativeBannerAd shimmer in bottomNavigationBar',
         (WidgetTester tester) async {
       await tester.pumpWidget(
         const ProviderScope(
@@ -89,8 +85,8 @@ void main() {
 
       final adFinder = find.byType(InlineNativeBannerAd);
       expect(adFinder, findsOneWidget);
-      expect(find.text('Ad'), findsOneWidget);
-      expect(find.text('Install'), findsOneWidget);
+      expect(find.byKey(const ValueKey('banner_ad_shimmer')), findsOneWidget);
+      expect(find.text('Install'), findsNothing);
     });
   });
 }

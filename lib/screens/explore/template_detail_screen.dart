@@ -7,7 +7,6 @@ import '../../core/routing/route_names.dart';
 import '../../providers/template_provider.dart';
 import '../../providers/project_provider.dart';
 import '../../widgets/glowing_action_button.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class TemplateDetailScreen extends ConsumerStatefulWidget {
   final String templateId;
@@ -24,7 +23,6 @@ class _TemplateDetailScreenState extends ConsumerState<TemplateDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     final templates = ref.watch(filteredTemplatesProvider);
     final template = templates.firstWhere(
       (t) => t.id == widget.templateId,

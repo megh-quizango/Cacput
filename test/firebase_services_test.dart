@@ -102,8 +102,17 @@ void main() {
       expect(rc.isAppOpenAdEnabled(), isFalse);
       expect(adService.isAppOpenAdEnabled, isFalse);
 
-      // Ensure no ad request is sent when disabled
+      // Ensure no ad request is sent when disabled (either key alias)
       final initialRequests = adService.appOpenAdRequestCount;
+      adService.loadAppOpenAd();
+      adService.preloadAds();
+      adService.showAppOpenAd();
+      expect(adService.appOpenAdRequestCount, equals(initialRequests));
+
+      rc.clearMockValues();
+      rc.setMockValue(FirebaseRemoteConfigService.keyAppOpenAdsEnabled, false);
+      expect(rc.getAppOpenAdEnabled(), isFalse);
+      expect(adService.isAppOpenAdEnabled, isFalse);
       adService.loadAppOpenAd();
       adService.preloadAds();
       adService.showAppOpenAd();

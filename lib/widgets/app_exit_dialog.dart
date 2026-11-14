@@ -87,7 +87,7 @@ class AppExitDialog extends StatelessWidget {
 
               // Title
               Text(
-                "Exit PhotoVideoCourse?",
+                "Exit Photo Video Course Guide?",
                 style: AppTypography.displayLarge.copyWith(
                   fontSize: 22,
                   fontWeight: FontWeight.w800,

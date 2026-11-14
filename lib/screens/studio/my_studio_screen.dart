@@ -8,7 +8,6 @@ import '../../providers/project_provider.dart';
 import '../../models/project_model.dart';
 import '../../widgets/glowing_action_button.dart';
 import 'widgets/new_project_modal.dart';
-import '../../core/theme/responsive_orientation_manager.dart';
 
 class MyStudioScreen extends ConsumerStatefulWidget {
   const MyStudioScreen({super.key});
@@ -30,7 +29,6 @@ class _MyStudioScreenState extends ConsumerState<MyStudioScreen> {
 
   @override
   Widget build(BuildContext context) {
-    ResponsiveOrientationHelper.enforce(context);
     final projects = ref.watch(projectProvider);
     final filteredProjects = projects.where((p) {
       if (_searchFilter.isEmpty) return true;

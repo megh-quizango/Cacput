@@ -1,6 +1,6 @@
 class AppConstants {
-  static const String logoAsset = "assets/images/logo.jpg";
-  static const String appIconAsset = "assets/images/app_icon.png";
+  static const String logoAsset = "assets/images/capcut_logo.jpg";
+  static const String appIconAsset = "assets/images/capcut_logo.jpg";
   static const String sampleLakeAsset = "assets/images/sample_lake.jpg";
   static const String sampleCoffeeAsset = "assets/images/sample_coffee.jpg";
   static const String sampleForestAsset = "assets/images/sample_forest.jpg";
