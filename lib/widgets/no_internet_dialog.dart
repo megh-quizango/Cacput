@@ -61,13 +61,15 @@ class _NoInternetDialogState extends State<NoInternetDialog>
       _isChecking = false;
     });
 
+    // Grab it before dismissing: this dialog's context is gone right after.
+    final messenger = ScaffoldMessenger.of(context);
     if (isOnline) {
       if (widget.onDismiss != null) {
         widget.onDismiss!();
       } else {
         Navigator.of(context, rootNavigator: true).pop();
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Row(
             children: [
@@ -82,7 +84,7 @@ class _NoInternetDialogState extends State<NoInternetDialog>
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(
           content: Text("Still offline. Please check your network settings."),
           backgroundColor: Color(0xFF221122),

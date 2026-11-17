@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_typography.dart';
@@ -10,7 +9,6 @@ import '../../services/connectivity_service.dart';
 import '../../services/ad_tab_service.dart';
 import '../../services/firebase_service.dart';
 import '../../services/firebase_remote_config_service.dart';
-import '../../widgets/inline_native_banner_ad.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -87,21 +85,8 @@ class _SplashScreenState extends State<SplashScreen>
     // Load cached prefs first so freshly fetched Remote Config overrides them cleanly.
     await AdTabService.instance.loadPersistedSettings();
 
-    // Mobile Ads SDK init no longer blocks navigation (it could take up to 4s);
-    // only Remote Config is awaited so ads load with the right ad unit ids.
     unawaited(AdTabService.instance.initialize(loadPrefs: false));
     await FirebaseService.instance.initialize();
-
-    // Preload ads once the SDK is ready, off the navigation path.
-    unawaited(MobileAds.instance.initialize().then((_) async {
-      InlineNativeBannerAd.preload();
-      // App Open ad waits for the fresh Remote Config fetch so a stale cached
-      // "app_open_ad_enabled: true" can't send a request after it was disabled.
-      await FirebaseRemoteConfigService.instance.waitForLatestConfig();
-      AdTabService.instance.preloadAds();
-    }).catchError((Object e) {
-      debugPrint("Ad preload after MobileAds init failed: $e");
-    }));
 
     // Keep splash animation smooth without adding an unnecessary long wait.
     if (_startTime != null) {

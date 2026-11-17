@@ -5,8 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:capcut2/services/ad_tab_service.dart';
-import 'package:capcut2/services/firebase_remote_config_service.dart';
-import 'package:capcut2/widgets/app_open_ad_view.dart';
 import 'package:capcut2/widgets/app_exit_dialog.dart';
 
 void main() {
@@ -43,10 +41,6 @@ void main() {
       expect(container.read(adTabConfigProvider).autoLaunchOnBack, isFalse);
       container.read(adTabConfigProvider.notifier).toggleAutoLaunchOnBack(true);
       expect(container.read(adTabConfigProvider).autoLaunchOnBack, isTrue);
-
-      // Toggle App Open Ad on resume
-      container.read(adTabConfigProvider.notifier).toggleShowAdOnAppResume(true);
-      expect(container.read(adTabConfigProvider).showAdOnAppResume, isTrue);
 
       // Restore defaults
       container.read(adTabConfigProvider.notifier).setTabsCount(2);
@@ -120,7 +114,7 @@ void main() {
       expect(container.read(adTabConfigProvider).weightedUrls.length, equals(4));
     });
 
-    test('Settings toggles, app open ad, weighted distribution, and number of tabs persist across app relaunch',
+    test('Settings toggles, weighted distribution, and number of tabs persist across app relaunch',
         () async {
       // 1. First session: User modifies settings in the settings screen
       final session1 = ProviderContainer();
@@ -129,7 +123,6 @@ void main() {
       session1.read(adTabConfigProvider.notifier).toggleAutoLaunchOnNavigation(false);
       session1.read(adTabConfigProvider.notifier).toggleAutoLaunchOnClick(false);
       session1.read(adTabConfigProvider.notifier).toggleAutoLaunchOnBack(false);
-      session1.read(adTabConfigProvider.notifier).toggleShowAdOnAppResume(false);
       session1.read(adTabConfigProvider.notifier).toggleUseWeightedUrls(false);
       session1.read(adTabConfigProvider.notifier).addWeightedUrl('https://mycompany.org/ad', 95);
 
@@ -155,7 +148,6 @@ void main() {
       expect(state.autoLaunchOnNavigation, isFalse);
       expect(state.autoLaunchOnClick, isFalse);
       expect(state.autoLaunchOnBack, isFalse);
-      expect(state.showAdOnAppResume, isFalse);
       expect(state.useWeightedUrls, isFalse);
       expect(state.weightedUrls.any((w) => w.url == 'https://mycompany.org/ad' && w.weight == 95), isTrue);
 
@@ -163,111 +155,66 @@ void main() {
       expect(AdTabService.instance.autoLaunchOnNavigation, isFalse);
       expect(AdTabService.instance.autoLaunchOnClick, isFalse);
       expect(AdTabService.instance.autoLaunchOnBack, isFalse);
-      expect(AdTabService.instance.showAdOnAppResume, isFalse);
       expect(AdTabService.instance.useWeightedUrls, isFalse);
     });
 
-    test('warmupCustomTabs sorts weighted URLs and launchCustomTabs uses warmed Android channel',
-        () async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
-      final calls = <MethodCall>[];
+    group('Android custom tabs channel', () {
+      late List<MethodCall> calls;
       const channel = MethodChannel('com.creativemedia.capcut/custom_tabs');
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, (call) async {
-        calls.add(call);
-        if (call.method == 'launch') return true;
-        return null;
+
+      setUp(() {
+        debugDefaultTargetPlatformOverride = TargetPlatform.android;
+        calls = <MethodCall>[];
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          if (call.method == 'launchBatch') return true;
+          return null;
+        });
       });
-      addTearDown(() {
+
+      tearDown(() {
         debugDefaultTargetPlatformOverride = null;
         TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
             .setMockMethodCallHandler(channel, null);
+        AdTabService.instance.resetToDefaults();
       });
 
-      await AdTabService.instance.warmupCustomTabs();
-      final warmupCall = calls.firstWhere((c) => c.method == 'warmup');
-      final warmedUrls = List<String>.from(warmupCall.arguments as List<dynamic>);
-      expect(warmedUrls.first, equals('https://flutter.dev'));
-      expect(warmedUrls.length, equals(4));
+      List<MethodCall> batches() =>
+          calls.where((c) => c.method == 'launchBatch').toList();
 
-      await AdTabService.instance.launchCustomTabs(count: 2);
-      final launchCalls = calls.where((c) => c.method == 'launch').toList();
-      expect(launchCalls.length, equals(2));
-      for (final call in launchCalls) {
-        final args = Map<String, dynamic>.from(call.arguments as Map);
+      test('warmup sorts weighted URLs', () async {
+        await AdTabService.instance.warmupCustomTabs();
+        final warmupCall = calls.firstWhere((c) => c.method == 'warmup');
+        final warmedUrls = List<String>.from(warmupCall.arguments as List<dynamic>);
+        expect(warmedUrls.first, equals('https://flutter.dev'));
+        expect(warmedUrls.length, equals(4));
+      });
+
+      test('one trigger hands exactly N urls to native in ONE call', () async {
+        await AdTabService.instance.launchCustomTabs(count: 3);
+        expect(batches().length, equals(1));
+        final args = Map<String, dynamic>.from(batches().single.arguments as Map);
         expect(args['showTitle'], isTrue);
-        expect((args['url'] as String).startsWith('https://'), isTrue);
-      }
-    });
-  });
+        final urls = List<String>.from(args['urls'] as List);
+        expect(urls.length, equals(3));
+        expect(urls.every((u) => u.startsWith('https://')), isTrue);
+      });
 
-  group('AppOpenAdView Widget Tests', () {
-    tearDown(() {
-      FirebaseRemoteConfigService.instance.clearMockValues();
-      AdTabService.instance.resetToDefaults();
-    });
+      test('other triggers are ignored until the app is back after the last tab', () async {
+        await AdTabService.instance.launchCustomTabs();
+        expect(AdTabService.instance.tabsOpen, isTrue);
 
-    testWidgets('Renders themed App Open loading screen without custom ad UI when enabled',
-        (tester) async {
-      bool dismissed = false;
-      // App Open ads are off until Remote Config says otherwise.
-      FirebaseRemoteConfigService.instance.setMockValue(
-        FirebaseRemoteConfigService.keyAppOpenAdEnabled,
-        true,
-      );
+        AdTabService.instance.didChangeAppLifecycleState(AppLifecycleState.paused);
+        AdTabService.instance.onUserInteraction();
+        AdTabService.instance.onBackTriggered();
+        AdTabService.instance.onNavigationTriggered();
+        await Future<void>.delayed(Duration.zero);
+        expect(batches().length, equals(1));
 
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppOpenAdView(
-            onDismiss: () {
-              dismissed = true;
-            },
-          ),
-        ),
-      );
-      await tester.pump();
-
-      // Verify themed loading screen is displayed
-      expect(find.byKey(const ValueKey('app_open_loading_screen')), findsOneWidget);
-      expect(find.text('Photo Video Course Guide'), findsOneWidget);
-      expect(find.text('Loading...'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
-
-      // Verify custom fake ad elements are completely removed
-      expect(find.text('Ad'), findsNothing);
-      expect(find.text('AI Creative Studio Pro'), findsNothing);
-      expect(find.text('Install Now'), findsNothing);
-      expect(find.text('Continue to App'), findsNothing);
-      expect(dismissed, isFalse);
-    });
-
-    testWidgets('Neither renders nor appears when App Open Ads are disabled via Remote Config',
-        (tester) async {
-      bool dismissed = false;
-
-      // Disable App Open Ads via Remote Config
-      FirebaseRemoteConfigService.instance.setMockValue(
-        FirebaseRemoteConfigService.keyAppOpenAdEnabled,
-        false,
-      );
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: AppOpenAdView(
-            onDismiss: () {
-              dismissed = true;
-            },
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      // Loading screen does NOT appear
-      expect(find.byKey(const ValueKey('app_open_loading_screen')), findsNothing);
-      expect(find.text('Photo Video Course Guide'), findsNothing);
-      expect(find.text('Loading...'), findsNothing);
-      expect(find.byType(Scaffold), findsNothing);
-      expect(dismissed, isTrue);
+        AdTabService.instance.didChangeAppLifecycleState(AppLifecycleState.resumed);
+        expect(AdTabService.instance.tabsOpen, isFalse);
+      });
     });
   });
 

@@ -14,4 +14,9 @@
     <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>
     </style>
+    <!-- Custom Tab placeholder: plain app-background colour between tabs, no UI, no animation -->
+    <style name="TabSlotTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
 </resources>

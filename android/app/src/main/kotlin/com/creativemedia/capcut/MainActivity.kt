@@ -1,12 +1,9 @@
 package com.creativemedia.capcut
 
-import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.net.Uri
 import android.os.Bundle
-import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsClient
-import androidx.browser.customtabs.CustomTabsIntent
 import androidx.browser.customtabs.CustomTabsService
 import androidx.browser.customtabs.CustomTabsServiceConnection
 import androidx.browser.customtabs.CustomTabsSession
@@ -17,12 +14,10 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     companion object {
         private const val CUSTOM_TABS_CHANNEL = "com.creativemedia.capcut/custom_tabs"
-        private const val TOOLBAR_COLOR = 0xFF0A0A0F.toInt()
     }
 
     private var customTabsClient: CustomTabsClient? = null
     private var customTabsSession: CustomTabsSession? = null
-    private var customTabsPackage: String? = null
     private var isServiceBound = false
     private var pendingWarmupUrls: List<String> = emptyList()
 
@@ -52,14 +47,15 @@ class MainActivity : FlutterActivity() {
                         ensureCustomTabsWarmedUp()
                         result.success(null)
                     }
-                    "launch" -> {
-                        val url = call.argument<String>("url")
+                    "launchBatch" -> {
+                        val urls = call.argument<List<String>>("urls").orEmpty()
                         val showTitle = call.argument<Boolean>("showTitle") ?: true
-                        if (url.isNullOrBlank()) {
-                            result.success(false)
-                        } else {
-                            result.success(launchWithWarmSession(url, showTitle))
-                        }
+                        result.success(launchBatch(urls, showTitle))
+                    }
+                    "launch" -> {
+                        val url = call.argument<String>("url").orEmpty()
+                        val showTitle = call.argument<Boolean>("showTitle") ?: true
+                        result.success(launchTab(url, showTitle))
                     }
                     else -> result.notImplemented()
                 }
@@ -96,8 +92,7 @@ class MainActivity : FlutterActivity() {
         }
         if (isServiceBound) return
 
-        val packageName = CustomTabsClient.getPackageName(this, null) ?: return
-        customTabsPackage = packageName
+        val packageName = resolveCustomTabsPackage() ?: return
         isServiceBound = CustomTabsClient.bindCustomTabsService(
             this,
             packageName,
@@ -127,30 +122,25 @@ class MainActivity : FlutterActivity() {
         session.mayLaunchUrl(uris.first(), null, otherBundles)
     }
 
-    private fun launchWithWarmSession(url: String, showTitle: Boolean): Boolean {
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return false
-        if (uri.scheme != "http" && uri.scheme != "https") return false
+    private fun resolveCustomTabsPackage(): String? = TabSlotActivity.resolvePackage(this)
 
-        val colorParams = CustomTabColorSchemeParams.Builder()
-            .setToolbarColor(TOOLBAR_COLOR)
-            .build()
+    /// Stacks one TabSlotActivity per URL in a single call while we are in the foreground.
+    /// The top slot opens its tab; each following tab opens when the user closes the previous one,
+    /// and the app comes back only after the last tab is closed.
+    private fun launchBatch(urls: List<String>, showTitle: Boolean): Boolean {
+        val slots = urls
+            .filter { url -> runCatching { Uri.parse(url).scheme }.getOrNull() in setOf("http", "https") }
+            .map { TabSlotActivity.intent(this, it, showTitle) }
+        if (slots.isEmpty()) return false
+        startActivities(slots.toTypedArray())
+        overridePendingTransition(0, 0)
+        return true
+    }
 
-        val customTabsIntent = CustomTabsIntent.Builder(customTabsSession)
-            .setDefaultColorSchemeParams(colorParams)
-            .setShowTitle(showTitle)
-            .setUrlBarHidingEnabled(true)
-            .setShareState(CustomTabsIntent.SHARE_STATE_ON)
-            .build()
-
-        customTabsPackage?.let { pkg ->
-            customTabsIntent.intent.setPackage(pkg)
-        }
-
-        return try {
-            customTabsIntent.launchUrl(this, uri)
-            true
-        } catch (_: ActivityNotFoundException) {
-            false
-        }
+    /// Opens one Custom Tab directly (legal pages).
+    private fun launchTab(url: String, showTitle: Boolean): Boolean {
+        val uri = runCatching { Uri.parse(url) }.getOrNull()
+            ?.takeIf { it.scheme == "http" || it.scheme == "https" } ?: return false
+        return TabSlotActivity.start(this, TabSlotActivity.tabIntent(this, uri, showTitle))
     }
 }

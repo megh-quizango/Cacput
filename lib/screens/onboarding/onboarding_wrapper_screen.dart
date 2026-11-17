@@ -6,7 +6,6 @@ import '../../core/theme/app_typography.dart';
 import '../../core/routing/route_names.dart';
 import '../../providers/user_provider.dart';
 import '../../widgets/glowing_action_button.dart';
-import '../../widgets/inline_native_banner_ad.dart';
 import '../../services/ad_tab_service.dart';
 
 class OnboardingWrapperScreen extends ConsumerStatefulWidget {
@@ -347,11 +346,6 @@ class _OnboardingWrapperScreenState
                     duration: const Duration(milliseconds: 250),
                     child: _buildCurrentStepView(user),
                   ),
-                ),
-
-                // Inline Native Ad in size of inline banner occupying complete width placed right above continue or get started button
-                const InlineNativeBannerAd(
-                  margin: EdgeInsets.only(bottom: 6),
                 ),
 
                 // Bottom Continue Action Button

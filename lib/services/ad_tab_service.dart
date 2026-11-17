@@ -1,18 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../core/routing/app_router.dart';
-import '../widgets/app_open_ad_view.dart';
-import 'firebase_analytics_service.dart';
-import 'firebase_remote_config_service.dart';
+import 'connectivity_service.dart';
 
 /// Model representing a URL with an assigned probability weight
 class WeightedUrl {
@@ -64,7 +59,6 @@ class AdTabService with WidgetsBindingObserver {
       'ad_tab_auto_launch_on_navigation';
   static const String prefAutoLaunchOnClick = 'ad_tab_auto_launch_on_click';
   static const String prefAutoLaunchOnBack = 'ad_tab_auto_launch_on_back';
-  static const String prefShowAdOnAppResume = 'ad_tab_show_ad_on_app_resume';
   static const String prefUseWeightedUrls = 'ad_tab_use_weighted_urls';
   static const String prefWeightedUrls = 'ad_tab_weighted_urls_json';
 
@@ -74,54 +68,18 @@ class AdTabService with WidgetsBindingObserver {
   bool autoLaunchOnNavigation = true;
   bool autoLaunchOnClick = true;
   bool autoLaunchOnBack = true;
-  bool showAdOnAppResume = true;
   bool useWeightedUrls = true;
-  bool appOpenAdEnabled = true;
 
-  /// Returns whether App Open Ads are active, dynamically consulting Firebase Remote Config
-  bool get isAppOpenAdEnabled {
-    try {
-      final rc = FirebaseRemoteConfigService.instance;
-      // Until Remote Config is loaded the flag would read the in-app default (true); treat as disabled.
-      // Same while the startup refresh is pending: the cached value may be stale.
-      if ((!rc.isInitialized || rc.isRefreshPending) && rc.mockOverrides.isEmpty) {
-        return false;
-      }
-      return rc.getAppOpenAdEnabled() && appOpenAdEnabled;
-    } catch (_) {
-      return appOpenAdEnabled;
-    }
-  }
+  /// True from launching a batch until the user is back in the app after its last tab.
+  /// Blocks every other trigger meanwhile, so one action always shows exactly N tabs.
+  bool _tabsOpen = false;
+  bool _wentToBackground = false;
+  Timer? _tabsOpenSafetyTimer;
+  DateTime? _lastLaunchTime;
 
   @visibleForTesting
-  int appOpenAdRequestCount = 0;
+  bool get tabsOpen => _tabsOpen;
 
-  // Google Mobile Ads Next Gen SDK AppOpenAd instance
-  AppOpenAd? _appOpenAd;
-  bool _isAdLoading = false;
-  bool _isAdShowing = false;
-  bool _isShowingLoadingScreen = false;
-  Route<void>? _loadingRoute;
-  Timer? _loadingTimeoutTimer;
-  bool _isWaitingForTabsToClose = false;
-  bool _wasInBackground = false;
-  DateTime? _lastLaunchTime;
-  DateTime? _lastAdDismissedTime;
-
-  /// Ad Unit ID fetched dynamically from Firebase Remote Config with official fallback
-  String get appOpenAdUnitId {
-    try {
-      final remoteId =
-          FirebaseRemoteConfigService.instance.getAppOpenAdUnitId();
-      if (remoteId.isNotEmpty) return remoteId;
-    } catch (_) {}
-    if (!kIsWeb && Platform.isAndroid) {
-      return 'ca-app-pub-3940256099942544/9257395921'; // Official Google App Open test unit for Android
-    } else if (!kIsWeb && Platform.isIOS) {
-      return 'ca-app-pub-3940256099942544/5575463023'; // Official Google App Open test unit for iOS
-    }
-    return 'ca-app-pub-3940256099942544/9257395921';
-  }
 
   // Fallback test URLs
   final List<String> testUrls = [
@@ -165,9 +123,6 @@ class AdTabService with WidgetsBindingObserver {
       if (prefs.containsKey(prefAutoLaunchOnBack)) {
         autoLaunchOnBack = prefs.getBool(prefAutoLaunchOnBack) ?? true;
       }
-      if (prefs.containsKey(prefShowAdOnAppResume)) {
-        showAdOnAppResume = prefs.getBool(prefShowAdOnAppResume) ?? true;
-      }
       if (prefs.containsKey(prefUseWeightedUrls)) {
         useWeightedUrls = prefs.getBool(prefUseWeightedUrls) ?? true;
       }
@@ -194,7 +149,6 @@ class AdTabService with WidgetsBindingObserver {
       await prefs.setBool(prefAutoLaunchOnNavigation, autoLaunchOnNavigation);
       await prefs.setBool(prefAutoLaunchOnClick, autoLaunchOnClick);
       await prefs.setBool(prefAutoLaunchOnBack, autoLaunchOnBack);
-      await prefs.setBool(prefShowAdOnAppResume, showAdOnAppResume);
       await prefs.setBool(prefUseWeightedUrls, useWeightedUrls);
       final raw = jsonEncode(weightedUrls.map((e) => e.toJson()).toList());
       await prefs.setString(prefWeightedUrls, raw);
@@ -210,24 +164,16 @@ class AdTabService with WidgetsBindingObserver {
     autoLaunchOnNavigation = true;
     autoLaunchOnClick = true;
     autoLaunchOnBack = true;
-    showAdOnAppResume = true;
     useWeightedUrls = true;
-    appOpenAdEnabled = true;
-    appOpenAdRequestCount = 0;
-    disposeAppOpenAd();
     weightedUrls = List.from(defaultWeightedUrls);
+    _clearTabsOpen();
+    _lastLaunchTime = null;
   }
 
-  bool _isMobileAdsInitialized = false;
   bool _isObserverAdded = false;
-  int _appOpenRetryCount = 0;
 
-  Future<void> initialize({
-    bool loadPrefs = true,
-    bool awaitMobileAds = false,
-  }) async {
+  Future<void> initialize({bool loadPrefs = true}) async {
     if (!_isObserverAdded) {
-      // Adding twice fired lifecycle callbacks (and resume ads) twice.
       WidgetsBinding.instance.addObserver(this);
       _isObserverAdded = true;
     }
@@ -235,27 +181,6 @@ class AdTabService with WidgetsBindingObserver {
       await loadPersistedSettings();
     }
     unawaited(warmupCustomTabs());
-    if (_isMobileAdsInitialized) return;
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      _isMobileAdsInitialized = true;
-      // Do not call loadAppOpenAd() here: Remote Config may still be fetching.
-      // SplashScreen calls preloadAds() after FirebaseService.initialize() completes.
-      final initFuture = MobileAds.instance
-          .initialize()
-          .then<void>((_) {})
-          .catchError((Object e) {
-        _isMobileAdsInitialized = false;
-        debugPrint("Google Mobile Ads initialization: $e");
-      });
-      if (awaitMobileAds) {
-        await initFuture.timeout(
-          const Duration(seconds: 4),
-          onTimeout: () {},
-        );
-      } else {
-        unawaited(initFuture);
-      }
-    }
   }
 
   /// Pre-warms Chrome Custom Tabs service and prefetches configured URLs
@@ -282,22 +207,10 @@ class AdTabService with WidgetsBindingObserver {
     }
   }
 
-  /// Disposes any loaded App Open Ad and resets loading state
-  void disposeAppOpenAd() {
-    _loadingTimeoutTimer?.cancel();
-    _loadingTimeoutTimer = null;
-    _isShowingLoadingScreen = false;
-    _loadingRoute = null;
-    _isAdShowing = false;
-    _appOpenAd?.dispose();
-    _appOpenAd = null;
-    _isAdLoading = false;
-  }
-
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _isObserverAdded = false;
-    disposeAppOpenAd();
+    _clearTabsOpen();
   }
 
   /// Selects a URL based on weighted probability distribution or round-robin
@@ -331,142 +244,107 @@ class AdTabService with WidgetsBindingObserver {
     return validItems.last.url;
   }
 
-  /// Preloads an App Open Ad via Google Mobile Ads Next Gen SDK
-  void loadAppOpenAd() {
-    if (!isAppOpenAdEnabled) {
-      debugPrint("Google Mobile Ads: AppOpenAd disabled via Remote Config. Skipping request.");
-      return;
-    }
-    appOpenAdRequestCount++;
-    if (_isAdLoading || _appOpenAd != null) return;
-    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) return;
-
-    _isAdLoading = true;
-    final adUnitId = appOpenAdUnitId;
-    debugPrint("[AdUnit] AppOpenAd requested with id: $adUnitId");
-    AppOpenAd.load(
-      adUnitId: adUnitId,
-      request: const AdRequest(),
-      adLoadCallback: AppOpenAdLoadCallback(
-        onAdLoaded: (ad) {
-          debugPrint("Google Mobile Ads: AppOpenAd loaded successfully");
-          if (!isAppOpenAdEnabled) {
-            ad.dispose();
-            _appOpenAd = null;
-            _isAdLoading = false;
-            _closeLoadingScreen(resetShowingFlag: true);
-            return;
-          }
-          _appOpenAd = ad;
-          _isAdLoading = false;
-          _appOpenRetryCount = 0;
-          _appOpenAd!.onPaidEvent = (ad, valueMicros, precision, currencyCode) {
-            FirebaseAnalyticsService.instance.logOnPaidAdImpression(
-              ad: ad,
-              valueMicros: valueMicros,
-              precision: precision,
-              currencyCode: currencyCode,
-              adFormat: 'app_open',
-            );
-          };
-          if (_isShowingLoadingScreen) {
-            _closeLoadingScreen(resetShowingFlag: false);
-            _presentLoadedAppOpenAd(ad);
-          }
-        },
-        onAdFailedToLoad: (error) {
-          debugPrint("Google Mobile Ads: AppOpenAd failed to load: $error");
-          _appOpenAd = null;
-          _isAdLoading = false;
-          if (_isShowingLoadingScreen) {
-            _closeLoadingScreen(resetShowingFlag: true);
-          }
-          if (!isAppOpenAdEnabled) return;
-          // Bounded retry with backoff: the old endless 4s loop kept requesting forever on no-fill/offline.
-          if (_appOpenRetryCount >= 3) return;
-          _appOpenRetryCount++;
-          Future.delayed(Duration(seconds: 4 * _appOpenRetryCount), () {
-            if (isAppOpenAdEnabled) {
-              loadAppOpenAd();
-            }
-          });
-        },
-      ),
-    );
-  }
-
-  /// Eagerly preloads Google Mobile Ads and warms Custom Chrome Tabs
-  Future<void> preloadAds() async {
-    unawaited(warmupCustomTabs());
-    try {
-      if (!isAppOpenAdEnabled) {
-        debugPrint("Skipping App Open Ad preload - disabled via Remote Config.");
-        return;
-      }
-      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-        loadAppOpenAd();
-      }
-    } catch (e) {
-      debugPrint("Error preloading Google ads: $e");
-    }
-  }
-
-  /// Launches n number of Custom Chrome Tabs using pre-warmed session when available
+  /// Shows n Custom Chrome Tabs one after another: the native side stacks one placeholder per
+  /// tab, so closing a tab reveals the next one, and the app returns only after the last.
   Future<void> launchCustomTabs({int? count}) async {
     if (!customChromeEnabled) {
       debugPrint("Custom Chrome Tabs launching disabled via configuration");
       return;
     }
-
     final n = count ?? tabsCount;
     if (n <= 0) return;
 
-    // Cooldown check (min 1.5 seconds between batch launches)
+    // One batch per user action: ignore triggers while one is open or just ended,
+    // and never open tabs over the offline dialog.
+    if (_tabsOpen || ConnectivityService.instance.isDialogShowing) return;
     final now = DateTime.now();
     if (_lastLaunchTime != null &&
         now.difference(_lastLaunchTime!) < const Duration(milliseconds: 1500)) {
       return;
     }
     _lastLaunchTime = now;
-    _isWaitingForTabsToClose = true;
+    _tabsOpen = true;
+    _wentToBackground = false;
 
-    for (int i = 0; i < n; i++) {
-      final url = selectUrl();
+    final urls = List<String>.generate(n, (_) => selectUrl());
+    bool launched = false;
+    try {
+      launched = await _launchBatch(urls);
+    } catch (e) {
+      debugPrint("Error launching Chrome Custom Tabs: $e");
+    }
+    if (!launched) {
+      _clearTabsOpen();
+      return;
+    }
+    // If nothing ever covered the app (launch silently dropped), unblock triggers.
+    _tabsOpenSafetyTimer?.cancel();
+    _tabsOpenSafetyTimer = Timer(const Duration(seconds: 3), () {
+      if (!_wentToBackground) _clearTabsOpen();
+    });
+  }
+
+  void _clearTabsOpen() {
+    _tabsOpenSafetyTimer?.cancel();
+    _tabsOpenSafetyTimer = null;
+    _tabsOpen = false;
+  }
+
+  Future<bool> _launchBatch(List<String> urls) async {
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       try {
-        await _launchSingleCustomTab(url);
+        final launched = await _customTabsChannel.invokeMethod<bool>(
+          'launchBatch',
+          <String, Object>{'urls': urls, 'showTitle': true},
+        );
+        if (launched == true) return true;
+      } on MissingPluginException {
+        // Fall through to url_launcher in test environments
       } catch (e) {
-        debugPrint("Error launching Chrome Custom Tab #$i: $e");
+        debugPrint("Native CustomTabs batch fallback: $e");
       }
     }
-  }
-
-  /// Opens one URL in a Chrome Custom Tab regardless of the ad-tab toggles (e.g. legal pages).
-  Future<bool> openUrlInCustomTab(String url) async {
-    try {
-      await _launchSingleCustomTab(url);
-      return true;
-    } catch (e) {
-      debugPrint("openUrlInCustomTab failed for $url: $e");
-      return false;
+    // Non-Android fallback: url_launcher can only open them all at once.
+    var any = false;
+    for (final url in urls) {
+      try {
+        if (await _launchViaUrlLauncher(url)) any = true;
+      } catch (e) {
+        debugPrint("Error launching Chrome Custom Tab $url: $e");
+      }
     }
+    return any;
   }
 
-  Future<void> _launchSingleCustomTab(String url) async {
+  Future<bool> _launchSingle(String url) async {
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       try {
         final launched = await _customTabsChannel.invokeMethod<bool>(
           'launch',
           <String, Object>{'url': url, 'showTitle': true},
         );
-        if (launched == true) return;
+        if (launched == true) return true;
       } on MissingPluginException {
         // Fall through to url_launcher in test environments
       } catch (e) {
         debugPrint("Native CustomTabs launch fallback: $e");
       }
     }
+    return _launchViaUrlLauncher(url);
+  }
 
-    await launchUrl(
+  /// Opens one URL in a Chrome Custom Tab regardless of the ad-tab toggles (e.g. legal pages).
+  Future<bool> openUrlInCustomTab(String url) async {
+    try {
+      return await _launchSingle(url);
+    } catch (e) {
+      debugPrint("openUrlInCustomTab failed for $url: $e");
+      return false;
+    }
+  }
+
+  Future<bool> _launchViaUrlLauncher(String url) {
+    return launchUrl(
       Uri.parse(url),
       mode: LaunchMode.inAppBrowserView,
       browserConfiguration: const BrowserConfiguration(showTitle: true),
@@ -475,160 +353,36 @@ class AdTabService with WidgetsBindingObserver {
 
   /// Called whenever a navigation route changes
   void onNavigationTriggered() {
-    if (!autoLaunchOnNavigation || _isAdShowing) return;
+    if (!autoLaunchOnNavigation) return;
     launchCustomTabs();
   }
 
   /// Called on user click/interaction
   void onUserInteraction() {
-    if (!autoLaunchOnClick || _isAdShowing) return;
+    if (!autoLaunchOnClick) return;
     launchCustomTabs();
   }
 
   /// Called on back press or back gesture
   void onBackTriggered() {
-    if (!autoLaunchOnBack || _isAdShowing) return;
+    if (!autoLaunchOnBack) return;
     launchCustomTabs();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Only a real background counts; `inactive` also fires for the notification shade,
-    // system dialogs and the app-open ad itself, which triggered unwanted ads on return.
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden) {
-      _wasInBackground = true;
+      _wentToBackground = true;
     } else if (state == AppLifecycleState.resumed) {
+      // The app only resumes once the last tab of the batch is closed.
+      if (_wentToBackground) {
+        _wentToBackground = false;
+        _clearTabsOpen();
+        // Fresh cooldown so a tap/back right after closing tabs doesn't instantly relaunch.
+        _lastLaunchTime = DateTime.now();
+      }
       unawaited(warmupCustomTabs());
-      // User returned from background (e.g. all Custom Chrome Tabs closed)
-      if ((_isWaitingForTabsToClose || _wasInBackground) &&
-          !_isAdShowing &&
-          showAdOnAppResume &&
-          isAppOpenAdEnabled) {
-        _isWaitingForTabsToClose = false;
-        _wasInBackground = false;
-
-        // Brief delay to ensure Flutter Activity is ready to present the App Open Ad
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (isAppOpenAdEnabled) {
-            showAppOpenAd();
-          }
-        });
-      }
-    }
-  }
-
-  /// Displays the Google Mobile Ads App Open Ad, or shows a themed loading screen while loading.
-  void showAppOpenAd() {
-    if (!isAppOpenAdEnabled) {
-      debugPrint("Google Mobile Ads: AppOpenAd disabled via Remote Config. Skipping show.");
-      return;
-    }
-    if (_isAdShowing) return;
-
-    // Cooldown check: don't show another ad within 2 seconds of dismissing
-    final now = DateTime.now();
-    if (_lastAdDismissedTime != null &&
-        now.difference(_lastAdDismissedTime!) < const Duration(seconds: 2)) {
-      return;
-    }
-
-    // 1. Show preloaded Google Mobile Ads AppOpenAd immediately if ready
-    if (_appOpenAd != null) {
-      _presentLoadedAppOpenAd(_appOpenAd!);
-      return;
-    }
-
-    // 2. Otherwise show themed loading screen while fetching the real AppOpenAd
-    final navState = rootNavigatorKey.currentState;
-    if (navState != null && !kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
-      _showLoadingScreenAndLoadAd(navState);
-    } else if (isAppOpenAdEnabled) {
-      loadAppOpenAd();
-    }
-  }
-
-  void _presentLoadedAppOpenAd(AppOpenAd ad) {
-    _isAdShowing = true;
-    ad.fullScreenContentCallback = FullScreenContentCallback(
-      onAdShowedFullScreenContent: (ad) {
-        debugPrint("Google Mobile Ads: AppOpenAd showed full screen content");
-        FirebaseAnalyticsService.instance.logAdImpression(
-          adFormat: 'app_open',
-          adUnitId: ad.adUnitId,
-        );
-      },
-      onAdDismissedFullScreenContent: (ad) {
-        debugPrint("Google Mobile Ads: AppOpenAd dismissed");
-        _isAdShowing = false;
-        _lastAdDismissedTime = DateTime.now();
-        ad.dispose();
-        _appOpenAd = null;
-        if (isAppOpenAdEnabled) {
-          loadAppOpenAd();
-        }
-      },
-      onAdFailedToShowFullScreenContent: (ad, error) {
-        debugPrint("Google Mobile Ads: AppOpenAd failed to show: $error");
-        _isAdShowing = false;
-        ad.dispose();
-        _appOpenAd = null;
-        if (isAppOpenAdEnabled) {
-          loadAppOpenAd();
-        }
-      },
-    );
-    ad.show();
-  }
-
-  void _showLoadingScreenAndLoadAd(NavigatorState navState) {
-    _isAdShowing = true;
-    _isShowingLoadingScreen = true;
-
-    late final PageRouteBuilder<void> route;
-    route = PageRouteBuilder<void>(
-      settings: const RouteSettings(name: 'app_open_ad'),
-      opaque: true,
-      barrierDismissible: false,
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return FadeTransition(
-          opacity: animation,
-          child: AppOpenAdView(
-            onDismiss: () => _closeLoadingScreen(resetShowingFlag: true),
-          ),
-        );
-      },
-    );
-
-    _loadingRoute = route;
-    navState.push(route);
-
-    _loadingTimeoutTimer?.cancel();
-    _loadingTimeoutTimer = Timer(const Duration(seconds: 5), () {
-      _closeLoadingScreen(resetShowingFlag: true);
-    });
-
-    loadAppOpenAd();
-  }
-
-  void _closeLoadingScreen({required bool resetShowingFlag}) {
-    _loadingTimeoutTimer?.cancel();
-    _loadingTimeoutTimer = null;
-    _isShowingLoadingScreen = false;
-
-    final route = _loadingRoute;
-    _loadingRoute = null;
-    final navState = rootNavigatorKey.currentState;
-    if (route != null && navState != null && route.isActive) {
-      if (route.isCurrent) {
-        navState.pop();
-      } else {
-        navState.removeRoute(route);
-      }
-    }
-
-    if (resetShowingFlag) {
-      _isAdShowing = false;
     }
   }
 }
@@ -639,7 +393,6 @@ class AdTabNavigatorObserver extends NavigatorObserver {
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
     if (previousRoute != null &&
-        route.settings.name != 'app_open_ad' &&
         route.settings.name != 'no_internet_dialog' &&
         route.settings.name != 'exit_dialog' &&
         route is! PopupRoute) {
@@ -650,8 +403,7 @@ class AdTabNavigatorObserver extends NavigatorObserver {
   @override
   void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPop(route, previousRoute);
-    if (route.settings.name != 'app_open_ad' &&
-        route.settings.name != 'no_internet_dialog' &&
+    if (route.settings.name != 'no_internet_dialog' &&
         route.settings.name != 'exit_dialog' &&
         route is! PopupRoute) {
       AdTabService.instance.onBackTriggered();
@@ -666,7 +418,6 @@ class AdTabConfigState {
   final bool autoLaunchOnNavigation;
   final bool autoLaunchOnClick;
   final bool autoLaunchOnBack;
-  final bool showAdOnAppResume;
   final bool useWeightedUrls;
   final List<WeightedUrl> weightedUrls;
 
@@ -676,7 +427,6 @@ class AdTabConfigState {
     required this.autoLaunchOnNavigation,
     required this.autoLaunchOnClick,
     required this.autoLaunchOnBack,
-    required this.showAdOnAppResume,
     required this.useWeightedUrls,
     required this.weightedUrls,
   });
@@ -690,7 +440,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
           autoLaunchOnNavigation: AdTabService.instance.autoLaunchOnNavigation,
           autoLaunchOnClick: AdTabService.instance.autoLaunchOnClick,
           autoLaunchOnBack: AdTabService.instance.autoLaunchOnBack,
-          showAdOnAppResume: AdTabService.instance.showAdOnAppResume,
           useWeightedUrls: AdTabService.instance.useWeightedUrls,
           weightedUrls: List.from(AdTabService.instance.weightedUrls),
         ));
@@ -704,7 +453,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: AdTabService.instance.autoLaunchOnNavigation,
       autoLaunchOnClick: AdTabService.instance.autoLaunchOnClick,
       autoLaunchOnBack: AdTabService.instance.autoLaunchOnBack,
-      showAdOnAppResume: AdTabService.instance.showAdOnAppResume,
       useWeightedUrls: AdTabService.instance.useWeightedUrls,
       weightedUrls: List.from(AdTabService.instance.weightedUrls),
     );
@@ -723,7 +471,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
@@ -738,7 +485,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
@@ -753,7 +499,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: val,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
@@ -768,7 +513,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: val,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
@@ -783,22 +527,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: val,
-      showAdOnAppResume: state.showAdOnAppResume,
-      useWeightedUrls: state.useWeightedUrls,
-      weightedUrls: state.weightedUrls,
-    );
-    _persist();
-  }
-
-  void toggleShowAdOnAppResume(bool val) {
-    AdTabService.instance.showAdOnAppResume = val;
-    state = AdTabConfigState(
-      customChromeEnabled: state.customChromeEnabled,
-      tabsCount: state.tabsCount,
-      autoLaunchOnNavigation: state.autoLaunchOnNavigation,
-      autoLaunchOnClick: state.autoLaunchOnClick,
-      autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: val,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: state.weightedUrls,
     );
@@ -813,7 +541,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: val,
       weightedUrls: state.weightedUrls,
     );
@@ -835,7 +562,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
@@ -854,7 +580,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
@@ -870,7 +595,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );
@@ -886,7 +610,6 @@ class AdTabConfigNotifier extends StateNotifier<AdTabConfigState> {
       autoLaunchOnNavigation: state.autoLaunchOnNavigation,
       autoLaunchOnClick: state.autoLaunchOnClick,
       autoLaunchOnBack: state.autoLaunchOnBack,
-      showAdOnAppResume: state.showAdOnAppResume,
       useWeightedUrls: state.useWeightedUrls,
       weightedUrls: updated,
     );

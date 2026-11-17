@@ -7,7 +7,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import '../core/routing/app_router.dart';
 import '../widgets/no_internet_dialog.dart';
 
-class ConnectivityService {
+class ConnectivityService with WidgetsBindingObserver {
   ConnectivityService._();
   static final ConnectivityService instance = ConnectivityService._();
 
@@ -18,11 +18,17 @@ class ConnectivityService {
   bool _isInitialized = false;
   Future<bool>? _inFlightCheck;
   bool _isOnline = true;
-  bool _isDialogShowing = false;
+  DialogRoute<void>? _dialogRoute;
   bool _isSimulatedOffline = false;
 
+  // While the app is behind Custom Tabs (or otherwise backgrounded) Android, and Samsung's
+  // battery manager in particular, cuts the app's network, so checks there give false "offline".
+  bool _isForeground = true;
+  bool _recheckOnResume = false;
+  Timer? _resumeRecheckTimer;
+
   bool get isOnline => !_isSimulatedOffline && _isOnline;
-  bool get isDialogShowing => _isDialogShowing;
+  bool get isDialogShowing => _dialogRoute != null;
 
   // Notifiers / listeners
   final ValueNotifier<bool> connectionNotifier = ValueNotifier<bool>(true);
@@ -30,6 +36,7 @@ class ConnectivityService {
   void initialize() {
     if (_isInitialized) return;
     _isInitialized = true;
+    WidgetsBinding.instance.addObserver(this);
 
     // Initial check
     checkRealConnection();
@@ -41,7 +48,7 @@ class ConnectivityService {
 
     // Periodic heartbeat to catch silent drops without excessive DNS churn
     _periodicCheckTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (!_isSimulatedOffline) {
+      if (!_isSimulatedOffline && _isForeground) {
         checkRealConnection();
       }
     });
@@ -49,11 +56,32 @@ class ConnectivityService {
 
   void dispose() {
     _isInitialized = false;
+    WidgetsBinding.instance.removeObserver(this);
+    _resumeRecheckTimer?.cancel();
     _subscription?.cancel();
     _subscription = null;
     _periodicCheckTimer?.cancel();
     _periodicCheckTimer = null;
     connectionNotifier.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _isForeground = true;
+      if (_recheckOnResume || !_isOnline) {
+        _recheckOnResume = false;
+        // Give the radio / Samsung network policy a moment to restore app access.
+        _resumeRecheckTimer?.cancel();
+        _resumeRecheckTimer = Timer(const Duration(milliseconds: 1200), () {
+          if (!_isSimulatedOffline) checkRealConnection();
+        });
+      }
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _isForeground = false;
+      _resumeRecheckTimer?.cancel();
+    }
   }
 
   /// Evaluates network interface results from connectivity_plus
@@ -100,28 +128,35 @@ class ConnectivityService {
         return false;
       }
 
-      final lookup = await InternetAddress.lookup('google.com')
-          .timeout(const Duration(milliseconds: 2000));
-      if (lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty) {
-        _updateConnectionStatus(true);
-        return true;
-      } else {
-        _updateConnectionStatus(false);
-        return false;
-      }
-    } on SocketException catch (_) {
-      _updateConnectionStatus(false);
-      return false;
-    } on TimeoutException catch (_) {
-      _updateConnectionStatus(false);
-      return false;
+      // One failed lookup is not proof of being offline (DNS hiccup, Wi-Fi handover,
+      // network restored just after resume): confirm with a second attempt first.
+      final online = await _canResolve() ||
+          (await Future<void>.delayed(const Duration(milliseconds: 1500))
+              .then((_) => _canResolve()));
+      _updateConnectionStatus(online);
+      return online;
     } catch (_) {
       _updateConnectionStatus(false);
       return false;
     }
   }
 
+  Future<bool> _canResolve() async {
+    try {
+      final lookup = await InternetAddress.lookup('google.com')
+          .timeout(const Duration(seconds: 4));
+      return lookup.isNotEmpty && lookup[0].rawAddress.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _updateConnectionStatus(bool isConnected) {
+    // Never go offline from a check made in the background; verify again on resume instead.
+    if (!isConnected && !_isForeground && !_isSimulatedOffline) {
+      _recheckOnResume = true;
+      return;
+    }
     if (_isOnline == isConnected) return;
     _isOnline = isConnected;
     connectionNotifier.value = isConnected;
@@ -140,45 +175,36 @@ class ConnectivityService {
 
   /// Shows the No Internet Dialog globally on top of any active screen
   void _showNoInternetDialog() {
-    if (_isDialogShowing) return;
+    if (_dialogRoute != null) return;
 
+    final navigator = rootNavigatorKey.currentState;
     final context = rootNavigatorKey.currentContext;
-    if (context == null) return;
+    if (navigator == null || context == null) return;
 
-    _isDialogShowing = true;
-
-    showDialog(
+    late final DialogRoute<void> route;
+    route = DialogRoute<void>(
       context: context,
       barrierDismissible: false,
-      useRootNavigator: true,
-      routeSettings: const RouteSettings(name: 'no_internet_dialog'),
-      builder: (dialogContext) {
-        return NoInternetDialog(
-          onDismiss: () {
-            _isDialogShowing = false;
-            Navigator.of(dialogContext, rootNavigator: true).pop();
-          },
-          onRetry: () async {
-            return await checkRealConnection();
-          },
-        );
-      },
-    ).then((_) {
-      _isDialogShowing = false;
+      settings: const RouteSettings(name: 'no_internet_dialog'),
+      builder: (_) => NoInternetDialog(
+        onDismiss: _dismissNoInternetDialog,
+        onRetry: checkRealConnection,
+      ),
+    );
+    _dialogRoute = route;
+    navigator.push(route).whenComplete(() {
+      if (identical(_dialogRoute, route)) _dialogRoute = null;
     });
   }
 
-  /// Dismisses the dialog automatically when internet connection is restored
+  /// Removes exactly the dialog route, wherever it is in the stack. The old code popped
+  /// blindly from two places (auto-restore + Retry), so the second pop removed the screen
+  /// underneath: blank screen, and that page pop fired the next Custom Tabs batch.
   void _dismissNoInternetDialog() {
-    if (!_isDialogShowing) return;
-
-    final context = rootNavigatorKey.currentContext;
-    if (context != null) {
-      // Old predicate stopped at the dialog itself (its name is non-null), so it never closed.
-      Navigator.of(context, rootNavigator: true)
-          .popUntil((route) => route.settings.name != 'no_internet_dialog');
-    }
-    _isDialogShowing = false;
+    final route = _dialogRoute;
+    _dialogRoute = null;
+    if (route == null || !route.isActive) return;
+    route.navigator?.removeRoute(route);
   }
 
   /// Developer Testing: Simulates offline mode

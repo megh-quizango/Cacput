@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:capcut2/core/theme/responsive_orientation_manager.dart';
 import 'package:capcut2/widgets/no_internet_dialog.dart';
 import 'package:capcut2/services/connectivity_service.dart';
+import 'package:capcut2/core/routing/app_router.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -167,6 +168,29 @@ void main() {
       service.simulateOnline();
       expect(service.isOnline, isTrue);
       expect(service.connectionNotifier.value, isTrue);
+    });
+
+    testWidgets('Dialog dismissed by restore AND by its own callback never pops the screen below',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        navigatorKey: rootNavigatorKey,
+        home: const Scaffold(body: Text('HOME')),
+      ));
+      final service = ConnectivityService.instance;
+
+      service.simulateOffline();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.byType(NoInternetDialog), findsOneWidget);
+      final dialog = tester.widget<NoInternetDialog>(find.byType(NoInternetDialog));
+
+      // Connection restored (auto-dismiss) and then the Retry path dismisses again.
+      service.simulateOnline();
+      dialog.onDismiss!();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.byType(NoInternetDialog), findsNothing);
+      expect(find.text('HOME'), findsOneWidget);
+      expect(service.isDialogShowing, isFalse);
     });
   });
 }
