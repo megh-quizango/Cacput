@@ -174,14 +174,14 @@ class _OnboardingWrapperScreenState
         return user.country.isNotEmpty;
       case 3:
         return user.gender.isNotEmpty;
-      case 4:
-        return user.interests.isNotEmpty;
+      case 4: // Interests, favourite content and AI preferences are optional.
+        return true;
       case 5:
         return user.experience.isNotEmpty;
       case 6:
-        return user.favoriteContent.isNotEmpty;
+        return true;
       case 7:
-        return user.aiPreferences.isNotEmpty;
+        return true;
       case 8:
         return true;
       default:
@@ -462,8 +462,11 @@ class _OnboardingWrapperScreenState
   Widget _buildBirthDateStep(user) {
     final hasDate = user.birthDate.isNotEmpty;
 
-    return SingleChildScrollView(
+    // Top-aligned: the step switcher centres its child otherwise.
+    return Align(
       key: const ValueKey("step_birth_date"),
+      alignment: Alignment.topCenter,
+      child: SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -471,9 +474,9 @@ class _OnboardingWrapperScreenState
           const SizedBox(height: 12),
           Text("Birth Date", style: AppTypography.displayLarge),
           const SizedBox(height: 8),
-          Text("Helps us customize template and music recommendations",
+          Text("We use this to personalize your experience",
               style: AppTypography.bodyLarge),
-          const SizedBox(height: 36),
+          const SizedBox(height: 48),
           GestureDetector(
             onTap: () async {
               final picked = await showDatePicker(
@@ -515,55 +518,35 @@ class _OnboardingWrapperScreenState
               }
             },
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
               decoration: BoxDecoration(
                 color: AppColors.cardSurface,
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: hasDate ? AppColors.brandPink : AppColors.cardBorder,
                   width: hasDate ? 1.5 : 1,
                 ),
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today_rounded,
-                        color: hasDate
-                            ? AppColors.brandPink
-                            : AppColors.textSecondary,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 14),
-                      Text(
-                        hasDate ? user.birthDate : "Select your birth date",
-                        style: AppTypography.titleMedium.copyWith(
-                          color: hasDate ? Colors.white : AppColors.textMuted,
-                          fontWeight:
-                              hasDate ? FontWeight.w700 : FontWeight.w400,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Icon(
-                    hasDate ? Icons.check_circle_rounded : Icons.edit_calendar_rounded,
-                    color: hasDate
-                        ? AppColors.brandPink
-                        : AppColors.textSecondary,
-                    size: 20,
+                  const Icon(Icons.calendar_today_rounded,
+                      color: AppColors.brandPink, size: 44),
+                  const SizedBox(height: 20),
+                  Text(
+                    hasDate ? user.birthDate : "Tap to select date",
+                    style: AppTypography.titleLarge.copyWith(
+                      color: Colors.white,
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          Text(
-            "Tap to select your date of birth from the calendar picker.",
-            style: AppTypography.labelSmall.copyWith(color: AppColors.textMuted),
-          ),
         ],
+      ),
       ),
     );
   }
@@ -657,6 +640,7 @@ class _OnboardingWrapperScreenState
                       ref
                           .read(userProvider.notifier)
                           .updateCountry(customName);
+                      AdTabService.instance.onUserInteraction();
                     },
                   );
                 }
@@ -868,6 +852,7 @@ class _OnboardingWrapperScreenState
                   if (text.isNotEmpty) {
                     ref.read(userProvider.notifier).addCustomInterest(text);
                     _customInterestController.clear();
+                    AdTabService.instance.onUserInteraction();
                     setState(() {});
                   }
                 },
@@ -888,6 +873,7 @@ class _OnboardingWrapperScreenState
                     selected: isSelected,
                     onSelected: (_) {
                       ref.read(userProvider.notifier).toggleInterest(interest);
+                      AdTabService.instance.onUserInteraction();
                     },
                     backgroundColor: AppColors.cardSurface,
                     selectedColor: AppColors.brandPink,
@@ -1051,6 +1037,7 @@ class _OnboardingWrapperScreenState
                         .read(userProvider.notifier)
                         .addCustomFavoriteContent(text);
                     _customContentController.clear();
+                    AdTabService.instance.onUserInteraction();
                     setState(() {});
                   }
                 },
@@ -1073,6 +1060,7 @@ class _OnboardingWrapperScreenState
                       ref
                           .read(userProvider.notifier)
                           .toggleFavoriteContent(content);
+                      AdTabService.instance.onUserInteraction();
                     },
                     backgroundColor: AppColors.cardSurface,
                     selectedColor: AppColors.brandPink,
@@ -1130,6 +1118,7 @@ class _OnboardingWrapperScreenState
                     selected: isSelected,
                     onSelected: (_) {
                       ref.read(userProvider.notifier).toggleAiPreference(feat);
+                      AdTabService.instance.onUserInteraction();
                     },
                     backgroundColor: AppColors.cardSurface,
                     selectedColor: AppColors.brandPink,

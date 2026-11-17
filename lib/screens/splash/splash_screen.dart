@@ -99,8 +99,16 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (mounted) {
       try {
-        final isOnboardingEnabled =
-            FirebaseRemoteConfigService.instance.getOnboardingEnabled();
+        final rc = FirebaseRemoteConfigService.instance;
+        final isOnboardingEnabled = rc.getOnboardingEnabled();
+        // Remote Config switch for the tabs that open when leaving the splash screen.
+        if (!rc.getBool(FirebaseRemoteConfigService.keyLaunchAfterSplash)) {
+          AdTabService.instance.muteNavigationTrigger = true;
+          // go_router navigates on the next frame; unmute once that frame is done.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            AdTabService.instance.muteNavigationTrigger = false;
+          });
+        }
         if (isOnboardingEnabled) {
           context.go(RouteNames.onboarding);
         } else {

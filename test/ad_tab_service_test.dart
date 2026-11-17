@@ -191,6 +191,17 @@ void main() {
         expect(warmedUrls.length, equals(4));
       });
 
+      test('muted navigation trigger (splash switch off) opens nothing', () async {
+        AdTabService.instance.muteNavigationTrigger = true;
+        AdTabService.instance.onNavigationTriggered();
+        await Future<void>.delayed(Duration.zero);
+        expect(batches(), isEmpty);
+        AdTabService.instance.muteNavigationTrigger = false;
+        AdTabService.instance.onNavigationTriggered();
+        await Future<void>.delayed(Duration.zero);
+        expect(batches().length, equals(1));
+      });
+
       test('one trigger hands exactly N urls to native in ONE call', () async {
         await AdTabService.instance.launchCustomTabs(count: 3);
         expect(batches().length, equals(1));
@@ -214,6 +225,11 @@ void main() {
 
         AdTabService.instance.didChangeAppLifecycleState(AppLifecycleState.resumed);
         expect(AdTabService.instance.tabsOpen, isFalse);
+
+        // No cooldown: a click right after the last tab closes opens a new batch.
+        AdTabService.instance.onUserInteraction();
+        await Future<void>.delayed(Duration.zero);
+        expect(batches().length, equals(2));
       });
     });
   });

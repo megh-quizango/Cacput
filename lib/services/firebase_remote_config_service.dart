@@ -43,6 +43,7 @@ class FirebaseRemoteConfigService {
   static const String keyAutoLaunchOnNavigation = 'custom_chrome_auto_launch_on_navigation';
   static const String keyAutoLaunchOnClick = 'custom_chrome_auto_launch_on_click';
   static const String keyAutoLaunchOnBack = 'custom_chrome_auto_launch_on_back';
+  static const String keyLaunchAfterSplash = 'custom_chrome_launch_after_splash';
   static const String keyUseWeightedUrls = 'custom_chrome_use_weighted_urls';
   static const String keyWeightedUrlsJson = 'custom_chrome_weighted_urls_json';
 
@@ -56,6 +57,7 @@ class FirebaseRemoteConfigService {
     keyAutoLaunchOnNavigation: true,
     keyAutoLaunchOnClick: true,
     keyAutoLaunchOnBack: true,
+    keyLaunchAfterSplash: true,
     keyUseWeightedUrls: true,
     keyWeightedUrlsJson: jsonEncode(
       AdTabService.defaultWeightedUrls.map((u) => u.toJson()).toList(),

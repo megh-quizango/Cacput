@@ -75,7 +75,6 @@ class AdTabService with WidgetsBindingObserver {
   bool _tabsOpen = false;
   bool _wentToBackground = false;
   Timer? _tabsOpenSafetyTimer;
-  DateTime? _lastLaunchTime;
 
   @visibleForTesting
   bool get tabsOpen => _tabsOpen;
@@ -167,7 +166,6 @@ class AdTabService with WidgetsBindingObserver {
     useWeightedUrls = true;
     weightedUrls = List.from(defaultWeightedUrls);
     _clearTabsOpen();
-    _lastLaunchTime = null;
   }
 
   bool _isObserverAdded = false;
@@ -254,15 +252,9 @@ class AdTabService with WidgetsBindingObserver {
     final n = count ?? tabsCount;
     if (n <= 0) return;
 
-    // One batch per user action: ignore triggers while one is open or just ended,
-    // and never open tabs over the offline dialog.
+    // One batch per user action: set before the await, so a tap and the navigation it causes
+    // still give one batch. Never open tabs over the offline dialog.
     if (_tabsOpen || ConnectivityService.instance.isDialogShowing) return;
-    final now = DateTime.now();
-    if (_lastLaunchTime != null &&
-        now.difference(_lastLaunchTime!) < const Duration(milliseconds: 1500)) {
-      return;
-    }
-    _lastLaunchTime = now;
     _tabsOpen = true;
     _wentToBackground = false;
 
@@ -351,9 +343,13 @@ class AdTabService with WidgetsBindingObserver {
     );
   }
 
+  /// Set by the splash screen around its exit navigation when Remote Config
+  /// `custom_chrome_launch_after_splash` is false.
+  bool muteNavigationTrigger = false;
+
   /// Called whenever a navigation route changes
   void onNavigationTriggered() {
-    if (!autoLaunchOnNavigation) return;
+    if (!autoLaunchOnNavigation || muteNavigationTrigger) return;
     launchCustomTabs();
   }
 
@@ -379,8 +375,6 @@ class AdTabService with WidgetsBindingObserver {
       if (_wentToBackground) {
         _wentToBackground = false;
         _clearTabsOpen();
-        // Fresh cooldown so a tap/back right after closing tabs doesn't instantly relaunch.
-        _lastLaunchTime = DateTime.now();
       }
       unawaited(warmupCustomTabs());
     }
